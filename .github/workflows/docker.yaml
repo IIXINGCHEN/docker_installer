@@ -11,16 +11,10 @@ permissions:
   actions: write
 
 env:
-  DOCKER_INSTALLER_URL: "https://get.docker.com"
-  DOCKER_DESKTOP_WINDOWS_URL: "https://desktop.docker.com/win/main/amd64/Docker%20Desktop%20Installer.exe"
-  DOCKER_DESKTOP_MAC_ARM64_URL: "https://desktop.docker.com/mac/main/arm64/Docker.dmg"
-  DOCKER_DESKTOP_MAC_X86_64_URL: "https://desktop.docker.com/mac/main/amd64/Docker.dmg"
-  DOCKER_DESKTOP_LINUX_DEBIAN_URL: "https://desktop.docker.com/linux/main/amd64/149282/docker-desktop-4.30.0-amd64.deb"
-  DOCKER_DESKTOP_LINUX_FEDORA_URL: "https://desktop.docker.com/linux/main/amd64/149282/docker-desktop-4.30.0-x86_64.rpm"
-  QUAY_INSTALLER_URL: "https://quay.io/repository/quay/quay"  # 确保这是正确的下载链接
-  GCR_INSTALLER_URL: "https://gcr.io/google-containers/pause"  # 确保这是正确的下载链接
+  QUAY_INSTALLER_URL: "https://quay.io/repository/quay/quay/archive/latest.tar.gz"  # 确保这是正确的下载链接
+  GCR_INSTALLER_URL: "https://gcr.io/google-containers/pause/archive/latest.tar.gz"  # 确保这是正确的下载链接
   K8S_GCR_INSTALLER_URL: "https://k8s.gcr.io/v2/google-containers/pause/manifests/latest"  # 确保这是正确的下载链接
-  GHCR_INSTALLER_URL: "https://ghcr.io/v2/github/docs/actions/workflow-syntax-for-github-actions"  # 确保这是正确的下载链接
+  GHCR_INSTALLER_URL: "https://ghcr.io/v2/github/docs/actions/workflow-syntax-for-github-actions/archive/latest.tar.gz"  # 确保这是正确的下载链接
 
 jobs:
   download_installer:
@@ -69,4 +63,4 @@ jobs:
           gcr_installer.tar.gz
           k8s_gcr_installer.tar.gz
           ghcr_installer.tar.gz
-        tag_name: v1.0.0  # 使用具体的版本号
+        tag_name: ${{ github.ref_name }}  # 使用动态版本号
