@@ -7,14 +7,7 @@ on:
 
 permissions:
   contents: write
-  packages: write
-  actions: write
-
-env:
-  QUAY_INSTALLER_URL: "https://quay.io/repository/quay/quay/archive/latest.tar.gz"  # 确保这是正确的下载链接
-  GCR_INSTALLER_URL: "https://gcr.io/google-containers/pause/archive/latest.tar.gz"  # 确保这是正确的下载链接
-  K8S_GCR_INSTALLER_URL: "https://k8s.gcr.io/v2/google-containers/pause/manifests/latest"  # 确保这是正确的下载链接
-  GHCR_INSTALLER_URL: "https://ghcr.io/v2/github/docs/actions/workflow-syntax-for-github-actions/archive/latest.tar.gz"  # 确保这是正确的下载链接
+  packages: write  # 确保有足够的权限进行发布操作
 
 jobs:
   download_installer:
@@ -23,31 +16,18 @@ jobs:
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
+      
+    - name: Set up environment
+      run: sudo apt-get install -y curl
 
-    - name: Download Docker installers
+    - name: Download installers
       run: |
-         curl -f -o install_docker.sh "${{ env.DOCKER_INSTALLER_URL }}"
-         curl -f -o docker_desktop_installer_windows_x86_64.exe "${{ env.DOCKER_DESKTOP_WINDOWS_URL }}"
-         curl -f -o docker_desktop_installer_mac_arm64.dmg "${{ env.DOCKER_DESKTOP_MAC_ARM64_URL }}"
-         curl -f -o docker_desktop_installer_mac_x86_64.dmg "${{ env.DOCKER_DESKTOP_MAC_X86_64_URL }}"
-         curl -f -o docker_desktop_installer_linux_debian_x86_64.deb "${{ env.DOCKER_DESKTOP_LINUX_DEBIAN_URL }}"
-         curl -f -o docker_desktop_installer_linux_fedora_x86_64.rpm "${{ env.DOCKER_DESKTOP_LINUX_FEDORA_URL }}"
-
-    - name: Download Quay installer
-      run: |
-         curl -f -o quay_installer.tar.gz "${{ env.QUAY_INSTALLER_URL }}"
-
-    - name: Download GCR installer
-      run: |
-         curl -f -o gcr_installer.tar.gz "${{ env.GCR_INSTALLER_URL }}"
-
-    - name: Download K8S GCR installer
-      run: |
-         curl -f -o k8s_gcr_installer.tar.gz "${{ env.K8S_GCR_INSTALLER_URL }}"
-
-    - name: Download GHCR installer
-      run: |
-         curl -f -o ghcr_installer.tar.gz "${{ env.GHCR_INSTALLER_URL }}"
+         curl -o install_docker.sh "https://get.docker.com" || echo "Failed to download install_docker.sh"
+         curl -o docker_desktop_installer_windows_x86_64.exe "https://desktop.docker.com/win/main/amd64/Docker%20Desktop%20Installer.exe" || echo "Failed to download docker_desktop_installer_windows_x86_64.exe"
+         curl -o docker_desktop_installer_mac_arm64.dmg "https://desktop.docker.com/mac/main/arm64/Docker.dmg" || echo "Failed to download docker_desktop_installer_mac_arm64.dmg"
+         curl -o docker_desktop_installer_mac_x86_64.dmg "https://desktop.docker.com/mac/main/amd64/Docker.dmg" || echo "Failed to download docker_desktop_installer_mac_x86_64.dmg"
+         curl -o docker_desktop_installer_linux_debian_x86_64.deb "https://desktop.docker.com/linux/main/amd64/149282/docker-desktop-4.30.0-amd64.deb" || echo "Failed to download docker_desktop_installer_linux_debian_x86_64.deb"
+         curl -o docker_desktop_installer_linux_fedora_x86_64.rpm "https://desktop.docker.com/linux/main/amd64/149282/docker-desktop-4.30.0-x86_64.rpm" || echo "Failed to download docker_desktop_installer_linux_fedora_x86_64.rpm"
 
     - name: Release
       uses: softprops/action-gh-release@v2
@@ -59,8 +39,5 @@ jobs:
           docker_desktop_installer_mac_x86_64.dmg
           docker_desktop_installer_linux_debian_x86_64.deb
           docker_desktop_installer_linux_fedora_x86_64.rpm
-          quay_installer.tar.gz
-          gcr_installer.tar.gz
-          k8s_gcr_installer.tar.gz
-          ghcr_installer.tar.gz
-        tag_name: ${{ github.ref_name }}  # 使用动态版本号
+        tag_name: latest
+        overwrite: true # 添加以允许覆盖已有发布
