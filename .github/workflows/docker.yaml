@@ -26,6 +26,10 @@ jobs:
       id: docker_desktop_windows_version
       run: |
          JSON_DATA=$(curl -s https://desktop.docker.com/win/main/amd64/stable.json)
+         if [[ $? -ne 0 ]]; then
+           echo "Failed to fetch Docker Desktop for Windows version"
+           exit 1
+         fi
          echo "JSON_DATA: $JSON_DATA"  # 调试信息
          DOCKER_DESKTOP_WINDOWS_VERSION=$(echo "$JSON_DATA" | jq -r '.versions[0].version')
          echo "DOCKER_DESKTOP_WINDOWS_VERSION=${DOCKER_DESKTOP_WINDOWS_VERSION}" >> $GITHUB_ENV
@@ -34,6 +38,10 @@ jobs:
       id: docker_desktop_mac_arm64_version
       run: |
          JSON_DATA=$(curl -s https://desktop.docker.com/mac/main/arm64/stable.json)
+         if [[ $? -ne 0 ]]; then
+           echo "Failed to fetch Docker Desktop for Mac (ARM64) version"
+           exit 1
+         fi
          echo "JSON_DATA: $JSON_DATA"  # 调试信息
          DOCKER_DESKTOP_MAC_ARM64_VERSION=$(echo "$JSON_DATA" | jq -r '.versions[0].version')
          echo "DOCKER_DESKTOP_MAC_ARM64_VERSION=${DOCKER_DESKTOP_MAC_ARM64_VERSION}" >> $GITHUB_ENV
@@ -42,6 +50,10 @@ jobs:
       id: docker_desktop_mac_x86_64_version
       run: |
          JSON_DATA=$(curl -s https://desktop.docker.com/mac/main/amd64/stable.json)
+         if [[ $? -ne 0 ]]; then
+           echo "Failed to fetch Docker Desktop for Mac (x86_64) version"
+           exit 1
+         fi
          echo "JSON_DATA: $JSON_DATA"  # 调试信息
          DOCKER_DESKTOP_MAC_X86_64_VERSION=$(echo "$JSON_DATA" | jq -r '.versions[0].version')
          echo "DOCKER_DESKTOP_MAC_X86_64_VERSION=${DOCKER_DESKTOP_MAC_X86_64_VERSION}" >> $GITHUB_ENV
@@ -50,6 +62,10 @@ jobs:
       id: docker_desktop_linux_debian_version
       run: |
          JSON_DATA=$(curl -s https://desktop.docker.com/linux/main/amd64/stable.json)
+         if [[ $? -ne 0 ]]; then
+           echo "Failed to fetch Docker Desktop for Linux (Debian) version"
+           exit 1
+         fi
          echo "JSON_DATA: $JSON_DATA"  # 调试信息
          DOCKER_DESKTOP_LINUX_DEBIAN_VERSION=$(echo "$JSON_DATA" | jq -r '.versions[0].version')
          echo "DOCKER_DESKTOP_LINUX_DEBIAN_VERSION=${DOCKER_DESKTOP_LINUX_DEBIAN_VERSION}" >> $GITHUB_ENV
@@ -58,6 +74,10 @@ jobs:
       id: docker_desktop_linux_fedora_version
       run: |
          JSON_DATA=$(curl -s https://desktop.docker.com/linux/main/amd64/stable.json)
+         if [[ $? -ne 0 ]]; then
+           echo "Failed to fetch Docker Desktop for Linux (Fedora) version"
+           exit 1
+         fi
          echo "JSON_DATA: $JSON_DATA"  # 调试信息
          DOCKER_DESKTOP_LINUX_FEDORA_VERSION=$(echo "$JSON_DATA" | jq -r '.versions[0].version')
          echo "DOCKER_DESKTOP_LINUX_FEDORA_VERSION=${DOCKER_DESKTOP_LINUX_FEDORA_VERSION}" >> $GITHUB_ENV
@@ -66,6 +86,10 @@ jobs:
       id: quay_version
       run: |
          JSON_DATA=$(curl -s https://quay.io/api/v1/repository/quay/quay/tag/)
+         if [[ $? -ne 0 ]]; then
+           echo "Failed to fetch Quay version"
+           exit 1
+         fi
          echo "JSON_DATA: $JSON_DATA"  # 调试信息
          QUAY_VERSION=$(echo "$JSON_DATA" | jq -r '.tags[0].name')
          echo "QUAY_VERSION=${QUAY_VERSION}" >> $GITHUB_ENV
@@ -74,6 +98,10 @@ jobs:
       id: gcr_version
       run: |
          JSON_DATA=$(curl -s https://gcr.io/v2/google-containers/pause/tags/list)
+         if [[ $? -ne 0 ]]; then
+           echo "Failed to fetch GCR version"
+           exit 1
+         fi
          echo "JSON_DATA: $JSON_DATA"  # 调试信息
          GCR_VERSION=$(echo "$JSON_DATA" | jq -r '.tags[0]')
          echo "GCR_VERSION=${GCR_VERSION}" >> $GITHUB_ENV
@@ -82,6 +110,10 @@ jobs:
       id: k8s_gcr_version
       run: |
          JSON_DATA=$(curl -s https://k8s.gcr.io/v2/google-containers/pause/tags/list)
+         if [[ $? -ne 0 ]]; then
+           echo "Failed to fetch K8S GCR version"
+           exit 1
+         fi
          echo "JSON_DATA: $JSON_DATA"  # 调试信息
          K8S_GCR_VERSION=$(echo "$JSON_DATA" | jq -r '.tags[0]')
          echo "K8S_GCR_VERSION=${K8S_GCR_VERSION}" >> $GITHUB_ENV
@@ -90,6 +122,10 @@ jobs:
       id: ghcr_version
       run: |
          JSON_DATA=$(curl -s https://ghcr.io/v2/github/docs/actions/workflow-syntax-for-github-actions/tags/list)
+         if [[ $? -ne 0 ]]; then
+           echo "Failed to fetch GHCR version"
+           exit 1
+         fi
          echo "JSON_DATA: $JSON_DATA"  # 调试信息
          GHCR_VERSION=$(echo "$JSON_DATA" | jq -r '.tags[0]')
          echo "GHCR_VERSION=${GHCR_VERSION}" >> $GITHUB_ENV
@@ -98,6 +134,10 @@ jobs:
       id: cloudsmith_version
       run: |
          JSON_DATA=$(curl -s https://dl.cloudsmith.io/public/cloudsmith/stable/setup.deb.sh)
+         if [[ $? -ne 0 ]]; then
+           echo "Failed to fetch Cloudsmith version"
+           exit 1
+         fi
          echo "JSON_DATA: $JSON_DATA"  # 调试信息
          CLOUDSMITH_VERSION=$(echo "$JSON_DATA" | grep -oP 'version="\K[^"]+')
          echo "CLOUDSMITH_VERSION=${CLOUDSMITH_VERSION}" >> $GITHUB_ENV
