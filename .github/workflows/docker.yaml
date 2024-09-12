@@ -21,7 +21,6 @@ env:
   GCR_INSTALLER_URL: "https://gcr.io/google-containers/pause"  # 确保这是正确的下载链接
   K8S_GCR_INSTALLER_URL: "https://k8s.gcr.io/v2/google-containers/pause/manifests/latest"  # 确保这是正确的下载链接
   GHCR_INSTALLER_URL: "https://ghcr.io/v2/github/docs/actions/workflow-syntax-for-github-actions"  # 确保这是正确的下载链接
-  CLOUDSMITH_INSTALLER_URL: "https://dl.cloudsmith.io/public/cloudsmith/stable/setup.deb.sh"
 
 jobs:
   download_installer:
@@ -56,10 +55,6 @@ jobs:
       run: |
          curl -f -o ghcr_installer.tar.gz "${{ env.GHCR_INSTALLER_URL }}"
 
-    - name: Download Cloudsmith installer
-      run: |
-         curl -f -o cloudsmith_installer.sh "${{ env.CLOUDSMITH_INSTALLER_URL }}"
-
     - name: Release
       uses: softprops/action-gh-release@v2
       with:
@@ -74,5 +69,4 @@ jobs:
           gcr_installer.tar.gz
           k8s_gcr_installer.tar.gz
           ghcr_installer.tar.gz
-          cloudsmith_installer.sh
-        tag_name: latest  # 使用具体的版本号
+        tag_name: v1.0.0  # 使用具体的版本号
