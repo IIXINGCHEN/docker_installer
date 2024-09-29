@@ -159,4 +159,4 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # GitHub Token
 
       - name: Output Release Notes  # 输出发布说明
-        run: cat release_notes.md  # 打印发布说明内容
+        run: cat release_notes_zh.md  # 打印发布说明内容
