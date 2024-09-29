@@ -33,7 +33,7 @@ jobs:
           release_id=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
             https://api.github.com/repos/${{ github.repository }}/releases/tags/v1.0 | \
             jq -r .id)
-          
+
           if [ "$release_id" != "null" ]; then
             curl -s -X DELETE -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
               https://api.github.com/repos/${{ github.repository }}/releases/$release_id
@@ -68,10 +68,10 @@ jobs:
             ["windows"]="https://desktop.docker.com/win/main/amd64/Docker%20Desktop%20Installer.exe"
             ["mac_arm64"]="https://desktop.docker.com/mac/main/arm64/Docker.dmg"
             ["mac_x86_64"]="https://desktop.docker.com/mac/main/amd64/Docker.dmg"
-            ["linux_debian"]="https://desktop.docker.com/linux/main/amd64/${{ env.version }}/docker-desktop-${{ env.version }}-amd64.deb"
-            ["linux_fedora"]="https://desktop.docker.com/linux/main/amd64/${{ env.version }}/docker-desktop-${{ env.version }}-x86_64.rpm"
-            ["linux_centos"]="https://desktop.docker.com/linux/main/amd64/${{ env.version }}/docker-desktop-${{ env.version }}-x86_64.rpm"
-            ["linux_ubuntu"]="https://desktop.docker.com/linux/main/amd64/${{ env.version }}/docker-desktop-${{ env.version }}-amd64.deb"
+            ["linux_debian"]="https://desktop.docker.com/linux/main/amd64/latest/docker-desktop-latest-amd64.deb"
+            ["linux_fedora"]="https://desktop.docker.com/linux/main/amd64/latest/docker-desktop-latest-x86_64.rpm"
+            ["linux_centos"]="https://desktop.docker.com/linux/main/amd64/latest/docker-desktop-latest-x86_64.rpm"
+            ["linux_ubuntu"]="https://desktop.docker.com/linux/main/amd64/latest/docker-desktop-latest-amd64.deb"
           )
           
           for key in "${!installers[@]}"; do
@@ -89,7 +89,7 @@ jobs:
               echo "Failed to download $file_name"; 
               exit 1; 
             }
-            
+
             # 检查下载文件是否存在
             if [ ! -f "$file_name" ]; then
               echo "$file_name does not exist after download"; 
@@ -105,12 +105,12 @@ jobs:
           body: "Release of Docker Installer latest LTS version for various platforms"
           files: |
             install_docker_server.sh
-            docker_desktop_installer_windows_*.exe
-            docker_desktop_installer_mac_arm64_*.dmg
-            docker_desktop_installer_mac_x86_64_*.dmg
-            docker_desktop_installer_linux_debian_*.deb
-            docker_desktop_installer_linux_fedora_*.rpm
-            docker_desktop_installer_linux_centos_*.rpm
-            docker_desktop_installer_linux_ubuntu_*.deb
+            docker_desktop_installer_windows_latest.exe
+            docker_desktop_installer_mac_arm64_latest.dmg
+            docker_desktop_installer_mac_x86_64_latest.dmg
+            docker_desktop_installer_linux_debian_latest.deb
+            docker_desktop_installer_linux_fedora_latest.rpm
+            docker_desktop_installer_linux_centos_latest.rpm
+            docker_desktop_installer_linux_ubuntu_latest.deb
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # GitHub 自动提供的 token
