@@ -1,68 +1,79 @@
-name: Docker Installer Download
+name: Docker Installer Download  # 工作流名称
 
 on:
-  workflow_dispatch:
-  schedule:
-    - cron: '0 16 * * *'  # 每天 UTC 时间 00:00 运行
+  workflow_dispatch:  # 允许手动触发工作流
+  schedule:  # 定时触发工作流
+    - cron: '0 16 * * *'  # 每天 UTC 时间 16:00 运行
 
 permissions:
-  contents: write
-  packages: write
+  contents: write  # 允许写入内容
+  packages: write  # 允许写入包
 
 jobs:
-  download_installer:
-    runs-on: ubuntu-latest
+  download_installer:  # 作业名称
+    runs-on: ubuntu-latest  # 运行环境
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - name: Checkout repository  # 检出代码库
+        uses: actions/checkout@v4  # 使用 GitHub 提供的检出行动
 
-      - name: Set up environment
+      - name: Set up environment  # 设置环境
         run: |
-          sudo apt-get update -y
-          sudo apt-get install -y curl jq || { echo "Failed to install required packages"; exit 1; }
+          sudo apt-get update -y  # 更新包列表
+          sudo apt-get install -y curl jq || { echo "Failed to install required packages"; exit 1; }  # 安装所需的包，失败时退出
 
-      - name: Check curl installation
+      - name: Check curl installation  # 检查 curl 是否安装
         run: |
-          if ! command -v curl &> /dev/null; then
+          if ! command -v curl &> /dev/null; then  # 检查 curl 命令是否存在
             echo "curl is not installed. Attempting to install." 
-            sudo apt-get install -y curl || { echo "curl installation failed, exiting!" ; exit 1; }
+            sudo apt-get install -y curl || { echo "curl installation failed, exiting!" ; exit 1; }  # 尝试安装 curl
           fi
 
-      - name: Delete old release (latest)
+      - name: Delete old release (latest)  # 删除旧版本的发布
         run: |
           echo "Deleting old release tagged as latest"
           release_response=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
-            https://api.github.com/repos/${{ github.repository }}/releases/tags/latest)
-          release_id=$(echo "$release_response" | jq -r .id)
+            https://api.github.com/repos/${{ github.repository }}/releases/tags/latest)  # 获取最新标记为 latest 的 release
+          
+          if [ $? -ne 0 ]; then  # 检查 curl 命令是否成功
+            echo "Failed to fetch releases. Exiting."
+            exit 1
+          fi
 
-          if [ "$release_id" != "null" ]; then
-            curl -s -X DELETE -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
-              https://api.github.com/repos/${{ github.repository }}/releases/$release_id
+          release_id=$(echo "$release_response" | jq -r .id)  # 提取 release ID
+          
+          if [ "$release_id" != "null" ]; then  # 检查是否找到有效的 release ID
+            delete_response=$(curl -s -X DELETE -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+              https://api.github.com/repos/${{ github.repository }}/releases/$release_id)  # 删除旧的 release
+            if [ $? -ne 0 ]; then  # 检查删除是否成功
+              echo "Failed to delete the old release. Exiting."
+              exit 1
+            fi
             echo "Old release tagged as latest deleted."
           else
             echo "No release tagged as latest found."
           fi
 
-      - name: Retrieve Latest Docker Version
-        id: get_latest_version
+      - name: Retrieve Latest Docker Version  # 获取最新 Docker 版本
+        id: get_latest_version  # 设置此步骤的 ID
         run: |
           # 获取最新的 LTS Docker 版本
           latest_version=$(curl -sL https://download.docker.com/linux/static/stable/x86_64/ | 
             grep -oP 'docker-\K[0-9]+\.[0-9]+\.[0-9]+' | 
             sort -V | 
-            tail -n 1)
+            tail -n 1)  # 从 Docker 的下载页面获取最新版本号
 
-          if [ -z "$latest_version" ]; then
+          if [ -z "$latest_version" ]; then  # 检查是否获取到版本号
             echo "No stable Docker version found, exiting."
             exit 1
           fi
-          echo "Latest stable Docker version: $latest_version"
-          echo "version=$latest_version" >> $GITHUB_ENV
 
-      - name: Download desktop installers
+          echo "Latest stable Docker version: $latest_version"  # 输出最新版本号
+          echo "version=$latest_version" >> $GITHUB_ENV  # 将版本号保存到环境变量中
+
+      - name: Download desktop installers  # 下载桌面安装程序
         run: |
-          declare -A installers
+          declare -A installers  # 声明一个关联数组
           installers=(
             ["windows_x86_64"]="https://desktop.docker.com/win/stable/amd64/Docker%20Desktop%20Installer.exe"
             ["mac_arm64"]="https://desktop.docker.com/mac/stable/arm64/Docker.dmg"
@@ -71,58 +82,70 @@ jobs:
             ["linux_fedora_x86_64"]="https://desktop.docker.com/linux/main/amd64/docker-desktop-latest-x86_64.rpm"
           )
           
+          # 循环遍历安装程序
           for key in "${!installers[@]}"; do
-            file_name="docker_desktop_installer_${key}"
+            file_name="docker_desktop_installer_${key}"  # 构造文件名
             case "$key" in
-              "linux_debian_x86_64") file_name+=".deb" ;;
-              "linux_fedora_x86_64") file_name+=".rpm" ;;
-              "mac_arm64"|"mac_x86_64") file_name+=".dmg" ;;
-              "windows_x86_64") file_name+=".exe" ;;
-              *) echo "Unknown key: $key"; exit 1 ;;
+              "linux_debian_x86_64") file_name+=".deb" ;;  # Debian 系统
+              "linux_fedora_x86_64") file_name+=".rpm" ;;  # Fedora 系统
+              "mac_arm64"|"mac_x86_64") file_name+=".dmg" ;;  # Mac 系统
+              "windows_x86_64") file_name+=".exe" ;;  # Windows 系统
+              *) echo "Unknown key: $key"; exit 1 ;;  # 未知平台处理
             esac
             
-            echo "Downloading $file_name from ${installers[$key]}"
-            curl -L -o "$file_name" "${installers[$key]}" || {
+            echo "Downloading $file_name from ${installers[$key]}"  # 输出下载信息
+            curl -L -o "$file_name" "${installers[$key]}"  # 下载文件
+            if [ $? -ne 0 ]; then  # 检查下载是否成功
               echo "Failed to download $file_name"; 
               exit 1; 
-            }
-
-            if [ ! -f "$file_name" ]; then
+            fi
+            
+            if [ ! -f "$file_name" ]; then  # 检查文件是否存在
               echo "$file_name does not exist after download"; 
               exit 1; 
             fi
           done
 
-      - name: Download Docker shell script
+      - name: 下载 Docker 安装脚本  # Download Docker shell script
         run: |
-          curl -o docker_install.sh "https://get.docker.com" || {
+          curl -o docker_install.sh "https://get.docker.com"  # 下载脚本
+          if [ $? -ne 0 ]; then  # 检查下载是否成功
             echo "Failed to download docker_install.sh"; 
             exit 1; 
-          }
+          fi
 
-      - name: Prepare Release Notes
+      - name: 准备发布说明  # Prepare Release Notes
         run: |
-          echo "Docker Installer Latest LTS Stable Version ${{ env.version }}" > release_notes.md
-          echo "" >> release_notes.md
-          for file in docker_desktop_installer_*.* docker_install.sh; do
-            if [ -f "$file" ]; then
-              size=$(du -h "$file" | cut -f1)
-              echo "$file" >> release_notes.md
-              echo "$size" >> release_notes.md
-              echo "$(date -r "$file" '+%Y-%m-%d %H:%M:%S')" >> release_notes.md
-              echo "" >> release_notes.md
-            fi
-          done
-          cat release_notes.md
+          echo "Docker Installer 最新 LTS 稳定版本 ${{ env.version }}" > release_notes_zh.md  # 写入版本信息
+          echo "" >> release_notes_zh.md
+          for file in docker_desktop_installer_*.* docker_install.sh; do  # 遍历所有下载的文件
+            if [ -f "$file" ]; then  # 检查文件是否存在
+              size=$(du -h "$file" | cut -f1)  # 获取文件大小
+              echo "$file" >> release_notes_zh.md  # 写入文件名
+              echo "$size" >> release_notes_zh.md  # 写入文件大小
+              echo "$(date -r "$file" '+%Y-%m-%d %H:%M:%S')" >> release_notes_zh.md  # 写入文件修改日期
 
-      - name: Create Release
-        id: release
-        uses: softprops/action-gh-release@v2
+      - name: Prepare Release Notes  # 准备发布说明
+        run: |
+          echo "Docker Installer Latest LTS Stable Version ${{ env.version }}" > release_notes.md  # 写入版本信息
+          echo "" >> release_notes.md
+          for file in docker_desktop_installer_*.* docker_install.sh; do  # 遍历所有下载的文件
+            if [ -f "$file" ]; then  # 检查文件是否存在
+              size=$(du -h "$file" | cut -f1)  # 获取文件大小
+              echo "$file" >> release_notes.md  # 写入文件名
+              echo "$size" >> release_notes.md  # 写入文件大小
+              echo "$(date -r "$file" '+%Y-%m-%d %H:%M:%S')" >> release_notes.md  # 写入文件修改日期
+          done
+          cat release_notes.md  # 输出发布说明文件内容
+
+      - name: Create Release  # 创建发布
+        id: release  # 设置此步骤的 ID
+        uses: softprops/action-gh-release@v2  # 使用 GitHub release 行动
         with:
-          tag_name: "latest"
-          name: "Docker Installer Latest LTS Stable Version ${{ env.version }}"
-          body_path: release_notes.md
-          files: |
+          tag_name: "latest"  # 发布标签名称
+          name: "Docker Installer Latest LTS Stable Version ${{ env.version }}"  # 发布名称
+          body_path: release_notes.md  # 发布说明文件路径
+          files: |  # 包含的文件列表
             docker_install.sh
             docker_desktop_installer_windows_x86_64.exe
             docker_desktop_installer_mac_arm64.dmg
@@ -130,7 +153,7 @@ jobs:
             docker_desktop_installer_linux_debian_x86_64.deb
             docker_desktop_installer_linux_fedora_x86_64.rpm
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # GitHub Token
 
-      - name: Output Release Notes
-        run: cat release_notes.md
+      - name: Output Release Notes  # 输出发布说明
+        run: cat release_notes.md  # 打印发布说明内容
