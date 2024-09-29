@@ -1,0 +1,77 @@
+name: Docker Installer Download
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  packages: write
+
+jobs:
+  download_installer:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up environment
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y curl
+          
+      - name: Check curl installation
+        run: |
+          if ! command -v curl &> /dev/null; then
+            echo "curl could not be installed"; exit 1;
+          fi
+
+      # 下载 Docker shell 脚本
+      - name: Download server installer and Docker shell script
+        run: |
+          curl -o install_docker_server.sh "https://get.docker.com" || { echo "Failed to download install_docker_server.sh"; exit 1; }
+
+      # 定义下载链接的数组
+      - name: Download desktop installers
+        run: |
+          declare -A installers
+          installers=(
+            ["windows"]="https://desktop.docker.com/win/main/amd64/Docker%20Desktop%20Installer.exe"
+            ["mac_arm64"]="https://desktop.docker.com/mac/main/arm64/Docker.dmg"
+            ["mac_x86_64"]="https://desktop.docker.com/mac/main/amd64/Docker.dmg"
+            ["linux_debian"]="https://desktop.docker.com/linux/main/amd64/149282/docker-desktop-4.30.0-amd64.deb"
+            ["linux_fedora"]="https://desktop.docker.com/linux/main/amd64/149282/docker-desktop-4.30.0-x86_64.rpm"
+            ["linux_centos"]="https://desktop.docker.com/linux/main/amd64/149282/docker-desktop-4.30.0-x86_64.rpm"
+            ["linux_ubuntu"]="https://desktop.docker.com/linux/main/amd64/149282/docker-desktop-4.30.0-amd64.deb"
+          )
+
+          for key in "${!installers[@]}"; do
+            case "$key" in
+              "linux_debian"|"linux_ubuntu")
+                file_name="docker_desktop_installer_${key}.deb"
+                ;;
+              "linux_fedora"|"linux_centos")
+                file_name="docker_desktop_installer_${key}.rpm"
+                ;;
+              "mac_arm64"|"mac_x86_64")
+                file_name="docker_desktop_installer_${key}.dmg"
+                ;;
+              "windows")
+                file_name="docker_desktop_installer_${key}.exe"
+                ;;
+            esac
+            curl -o "$file_name" "${installers[$key]}" || { echo "Failed to download $file_name"; exit 1; }
+          done
+
+      - name: Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            install_docker_server.sh
+            docker_desktop_installer_windows.exe
+            docker_desktop_installer_mac_arm64.dmg
+            docker_desktop_installer_mac_x86_64.dmg
+            docker_desktop_installer_linux_debian.deb
+            docker_desktop_installer_linux_fedora.rpm
+            docker_desktop_installer_linux_centos.rpm
+            docker_desktop_installer_linux_ubuntu.deb
