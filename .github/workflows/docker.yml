@@ -2,6 +2,8 @@ name: Docker Installer Download
 
 on:
   workflow_dispatch:
+  schedule:
+    - cron: '0 16 * * *'  # 每天 UTC 时间 00:00 运行
 
 permissions:
   contents: write
@@ -27,40 +29,29 @@ jobs:
             sudo apt-get install -y curl || { echo "curl installation failed, exiting!" ; exit 1; }
           fi
 
-      - name: Delete old release (v1.0)
+      - name: Delete old release (latest)
         run: |
-          echo "Deleting old release v1.0"
+          echo "Deleting old release tagged as latest"
           release_response=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
-            https://api.github.com/repos/${{ github.repository }}/releases/tags/v1.0)
+            https://api.github.com/repos/${{ github.repository }}/releases/tags/latest)
           release_id=$(echo "$release_response" | jq -r .id)
 
           if [ "$release_id" != "null" ]; then
             curl -s -X DELETE -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
               https://api.github.com/repos/${{ github.repository }}/releases/$release_id
-            echo "Old release v1.0 deleted."
+            echo "Old release tagged as latest deleted."
           else
-            echo "Release v1.0 not found."
+            echo "No release tagged as latest found."
           fi
 
       - name: Retrieve Latest Docker Version
         id: get_latest_version
         run: |
-          # 获取重定向后的 URL
-          redirect_url=$(curl -sI https://api.github.com/repos/docker/docker-ce/releases | grep -i '^location:' | awk '{print $2}' | tr -d '\r')
-          echo "Debug: Redirected URL: $redirect_url"
-
-          # 使用重定向后的 URL 获取发布信息
-          releases_info=$(curl -sL "$redirect_url")
-          echo "Debug: Raw API response"
-          echo "$releases_info" | jq '.'
-
           # 获取最新的 LTS Docker 版本
-          latest_version=$(echo "$releases_info" | 
-            jq -r '[.[] | select(.prerelease == false and (.tag_name | test("^v?[0-9]+\\.[0-9]+\\.[0-9]+$"))) | .tag_name][0]') || 
-            { echo "Failed to retrieve latest Docker version"; exit 1; }
-
-          # 更多调试输出
-          echo "Debug: Latest version found: $latest_version"
+          latest_version=$(curl -sL https://download.docker.com/linux/static/stable/x86_64/ | 
+            grep -oP 'docker-\K[0-9]+\.[0-9]+\.[0-9]+' | 
+            sort -V | 
+            tail -n 1)
 
           if [ -z "$latest_version" ]; then
             echo "No stable Docker version found, exiting."
@@ -69,69 +60,77 @@ jobs:
           echo "Latest stable Docker version: $latest_version"
           echo "version=$latest_version" >> $GITHUB_ENV
 
-      - name: Download Docker shell script
-        run: |
-          curl -o install_docker_server.sh "https://get.docker.com" || {
-            echo "Failed to download install_docker_server.sh"; 
-            exit 1; 
-          }
-
       - name: Download desktop installers
         run: |
           declare -A installers
           installers=(
-            ["windows"]="https://desktop.docker.com/win/main/amd64/Docker%20Desktop%20Installer.exe"
-            ["mac_arm64"]="https://desktop.docker.com/mac/main/arm64/Docker.dmg"
-            ["mac_x86_64"]="https://desktop.docker.com/mac/main/amd64/Docker.dmg"
-            ["linux_debian"]="https://desktop.docker.com/linux/main/amd64/latest/docker-desktop-latest-amd64.deb"
-            ["linux_fedora"]="https://desktop.docker.com/linux/main/amd64/latest/docker-desktop-latest-x86_64.rpm"
-            ["linux_centos"]="https://desktop.docker.com/linux/main/amd64/latest/docker-desktop-latest-x86_64.rpm"
-            ["linux_ubuntu"]="https://desktop.docker.com/linux/main/amd64/latest/docker-desktop-latest-amd64.deb"
+            ["windows_x86_64"]="https://desktop.docker.com/win/stable/amd64/Docker%20Desktop%20Installer.exe"
+            ["mac_arm64"]="https://desktop.docker.com/mac/stable/arm64/Docker.dmg"
+            ["mac_x86_64"]="https://desktop.docker.com/mac/stable/amd64/Docker.dmg"
+            ["linux_debian_x86_64"]="https://desktop.docker.com/linux/main/amd64/docker-desktop-latest-amd64.deb"
+            ["linux_fedora_x86_64"]="https://desktop.docker.com/linux/main/amd64/docker-desktop-latest-x86_64.rpm"
           )
           
           for key in "${!installers[@]}"; do
-            file_name="docker_desktop_installer_${key}"  # 删除时间戳部分
+            file_name="docker_desktop_installer_${key}"
             case "$key" in
-              "linux_debian"|"linux_ubuntu") file_name+=".deb" ;;
-              "linux_fedora"|"linux_centos") file_name+=".rpm" ;;
+              "linux_debian_x86_64") file_name+=".deb" ;;
+              "linux_fedora_x86_64") file_name+=".rpm" ;;
               "mac_arm64"|"mac_x86_64") file_name+=".dmg" ;;
-              "windows") file_name+=".exe" ;;
+              "windows_x86_64") file_name+=".exe" ;;
               *) echo "Unknown key: $key"; exit 1 ;;
             esac
             
             echo "Downloading $file_name from ${installers[$key]}"
-            curl -o "$file_name" "${installers[$key]}" || {
+            curl -L -o "$file_name" "${installers[$key]}" || {
               echo "Failed to download $file_name"; 
               exit 1; 
             }
 
-            # 检查下载文件是否存在
             if [ ! -f "$file_name" ]; then
               echo "$file_name does not exist after download"; 
               exit 1; 
             fi
           done
 
-      - name: Remove timestamped installer files
+      - name: Download Docker shell script
         run: |
-          echo "Removing timestamped files..."
-          # 使用模式匹配删除带有时间戳的文件
-          find . -type f -name "docker_desktop_installer_*_*" -exec rm -f {} \;
+          curl -o docker_install.sh "https://get.docker.com" || {
+            echo "Failed to download docker_install.sh"; 
+            exit 1; 
+          }
+
+      - name: Prepare Release Notes
+        run: |
+          echo "Docker Installer Latest LTS Stable Version ${{ env.version }}" > release_notes.md
+          echo "" >> release_notes.md
+          for file in docker_desktop_installer_*.* docker_install.sh; do
+            if [ -f "$file" ]; then
+              size=$(du -h "$file" | cut -f1)
+              echo "$file" >> release_notes.md
+              echo "$size" >> release_notes.md
+              echo "$(date -r "$file" '+%Y-%m-%d %H:%M:%S')" >> release_notes.md
+              echo "" >> release_notes.md
+            fi
+          done
+          cat release_notes.md
 
       - name: Create Release
         id: release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: "latest"  # 标记每个发布为最新版本
-          body: "Release of Docker Installer latest LTS version for various platforms"
+          tag_name: "latest"
+          name: "Docker Installer Latest LTS Stable Version ${{ env.version }}"
+          body_path: release_notes.md
           files: |
-            install_docker_server.sh
-            docker_desktop_installer_windows.exe
+            docker_install.sh
+            docker_desktop_installer_windows_x86_64.exe
             docker_desktop_installer_mac_arm64.dmg
             docker_desktop_installer_mac_x86_64.dmg
-            docker_desktop_installer_linux_debian.deb
-            docker_desktop_installer_linux_fedora.rpm
-            docker_desktop_installer_linux_centos.rpm
-            docker_desktop_installer_linux_ubuntu.deb
+            docker_desktop_installer_linux_debian_x86_64.deb
+            docker_desktop_installer_linux_fedora_x86_64.rpm
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # GitHub 自动提供的 token
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Output Release Notes
+        run: cat release_notes.md
