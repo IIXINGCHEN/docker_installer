@@ -18,18 +18,32 @@ jobs:
       - name: Set up environment
         run: |
           sudo apt-get update -y
-          sudo apt-get install -y curl
-          
+          sudo apt-get install -y curl jq
+
       - name: Check curl installation
         run: |
           if ! command -v curl &> /dev/null; then
-            echo "curl could not be installed"; exit 1;
+            echo "curl is not installed. Attempting to install." 
+            sudo apt-get install -y curl || { echo "curl installation failed, exiting!" ; exit 1; }
           fi
 
-      # 下载 Docker shell 脚本
-      - name: Download server installer and Docker shell script
+      - name: Retrieve Latest Docker Version
+        id: get_latest_version
         run: |
-          curl -o install_docker_server.sh "https://get.docker.com" || { echo "Failed to download install_docker_server.sh"; exit 1; }
+          # 获取最新的 LTS Docker 版本
+          latest_version=$(curl -s https://api.github.com/repos/docker/docker-ce/releases | 
+                           jq -r '.[] | select(.prerelease == false) | .tag_name' | 
+                           grep -E '^[0-9]+.[0-9]+.[0-9]+$' | head -n 1)
+          echo "Latest stable Docker version: $latest_version"
+          echo "version=$latest_version" >> $GITHUB_ENV
+
+      # 下载 Docker shell 脚本
+      - name: Download Docker shell script
+        run: |
+          curl -o install_docker_server.sh "https://get.docker.com" || {
+            echo "Failed to download install_docker_server.sh"; 
+            exit 1; 
+          }
 
       # 定义下载链接的数组
       - name: Download desktop installers
@@ -39,45 +53,50 @@ jobs:
             ["windows"]="https://desktop.docker.com/win/main/amd64/Docker%20Desktop%20Installer.exe"
             ["mac_arm64"]="https://desktop.docker.com/mac/main/arm64/Docker.dmg"
             ["mac_x86_64"]="https://desktop.docker.com/mac/main/amd64/Docker.dmg"
-            ["linux_debian"]="https://desktop.docker.com/linux/main/amd64/149282/docker-desktop-4.30.0-amd64.deb"
-            ["linux_fedora"]="https://desktop.docker.com/linux/main/amd64/149282/docker-desktop-4.30.0-x86_64.rpm"
-            ["linux_centos"]="https://desktop.docker.com/linux/main/amd64/149282/docker-desktop-4.30.0-x86_64.rpm"
-            ["linux_ubuntu"]="https://desktop.docker.com/linux/main/amd64/149282/docker-desktop-4.30.0-amd64.deb"
+            ["linux_debian"]="https://desktop.docker.com/linux/main/amd64/${{ env.version }}/docker-desktop-${{ env.version }}-amd64.deb"
+            ["linux_fedora"]="https://desktop.docker.com/linux/main/amd64/${{ env.version }}/docker-desktop-${{ env.version }}-x86_64.rpm"
+            ["linux_centos"]="https://desktop.docker.com/linux/main/amd64/${{ env.version }}/docker-desktop-${{ env.version }}-x86_64.rpm"
+            ["linux_ubuntu"]="https://desktop.docker.com/linux/main/amd64/${{ env.version }}/docker-desktop-${{ env.version }}-amd64.deb"
           )
-
+          
           for key in "${!installers[@]}"; do
+            file_name="docker_desktop_installer_${key}_$(date +%s)"
             case "$key" in
-              "linux_debian"|"linux_ubuntu")
-                file_name="docker_desktop_installer_${key}.deb"
-                ;;
-              "linux_fedora"|"linux_centos")
-                file_name="docker_desktop_installer_${key}.rpm"
-                ;;
-              "mac_arm64"|"mac_x86_64")
-                file_name="docker_desktop_installer_${key}.dmg"
-                ;;
-              "windows")
-                file_name="docker_desktop_installer_${key}.exe"
-                ;;
+              "linux_debian"|"linux_ubuntu") file_name+=".deb" ;;
+              "linux_fedora"|"linux_centos") file_name+=".rpm" ;;
+              "mac_arm64"|"mac_x86_64") file_name+=".dmg" ;;
+              "windows") file_name+=".exe" ;;
+              *) echo "Unknown key: $key"; exit 1 ;;
             esac
-            curl -o "$file_name" "${installers[$key]}" || { echo "Failed to download $file_name"; exit 1; }
+            
+            echo "Downloading $file_name from ${installers[$key]}"
+            curl -o "$file_name" "${installers[$key]}" || {
+              echo "Failed to download $file_name"; 
+              exit 1; 
+            }
+            
+            # 检查下载文件是否存在
+            if [ ! -f "$file_name" ]; then
+              echo "$file_name does not exist after download"; 
+              exit 1; 
+            fi
           done
 
       - name: Create Release
         id: release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: "latest"  # 请根据需要修改标签名称
+          tag_name: "latest"  # 标记每个发布为最新版本
           release_name: "Docker Installer Release latest"  # 发布名称
-          body: "Release of Docker Installer for various platforms"
+          body: "Release of Docker Installer latest LTS version for various platforms"
           files: |
             install_docker_server.sh
-            docker_desktop_installer_windows.exe
-            docker_desktop_installer_mac_arm64.dmg
-            docker_desktop_installer_mac_x86_64.dmg
-            docker_desktop_installer_linux_debian.deb
-            docker_desktop_installer_linux_fedora.rpm
-            docker_desktop_installer_linux_centos.rpm
-            docker_desktop_installer_linux_ubuntu.deb
+            docker_desktop_installer_windows_*.exe
+            docker_desktop_installer_mac_arm64_*.dmg
+            docker_desktop_installer_mac_x86_64_*.dmg
+            docker_desktop_installer_linux_debian_*.deb
+            docker_desktop_installer_linux_fedora_*.rpm
+            docker_desktop_installer_linux_centos_*.rpm
+            docker_desktop_installer_linux_ubuntu_*.deb
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # GitHub 自动提供的 token
