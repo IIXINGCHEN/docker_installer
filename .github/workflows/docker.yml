@@ -20,13 +20,19 @@ jobs:
       - name: Set up environment  # 设置环境
         run: |
           sudo apt-get update -y  # 更新包列表
-          sudo apt-get install -y curl jq || { echo "Failed to install required packages"; exit 1; }  # 安装所需的包，失败时退出
+          if ! sudo apt-get install -y curl jq; then  # 安装所需的包
+            echo "Failed to install required packages"; 
+            exit 1; 
+          fi
 
       - name: Check curl installation  # 检查 curl 是否安装
         run: |
           if ! command -v curl &> /dev/null; then  # 检查 curl 命令是否存在
             echo "curl is not installed. Attempting to install." 
-            sudo apt-get install -y curl || { echo "curl installation failed, exiting!" ; exit 1; }  # 尝试安装 curl
+            if ! sudo apt-get install -y curl; then  # 尝试安装 curl
+              echo "curl installation failed, exiting!"; 
+              exit 1; 
+            fi
           fi
 
       - name: Delete old release (latest)  # 删除旧版本的发布
@@ -35,7 +41,7 @@ jobs:
           release_response=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
             https://api.github.com/repos/${{ github.repository }}/releases/tags/latest)  # 获取最新标记为 latest 的 release
           
-          if [ $? -ne 0 ]; then  # 检查 curl 命令是否成功
+          if [ $? -ne 0 ] || [ -z "$release_response" ]; then  # 检查 curl 命令是否成功
             echo "Failed to fetch releases. Exiting."
             exit 1
           fi
@@ -94,8 +100,7 @@ jobs:
             esac
             
             echo "Downloading $file_name from ${installers[$key]}"  # 输出下载信息
-            curl -L -o "$file_name" "${installers[$key]}"  # 下载文件
-            if [ $? -ne 0 ]; then  # 检查下载是否成功
+            if ! curl -L -o "$file_name" "${installers[$key]}"; then  # 下载文件
               echo "Failed to download $file_name"; 
               exit 1; 
             fi
@@ -108,38 +113,27 @@ jobs:
 
       - name: 下载 Docker 安装脚本  # Download Docker shell script
         run: |
-          curl -o docker_install.sh "https://get.docker.com"  # 下载脚本
-          if [ $? -ne 0 ]; then  # 检查下载是否成功
+          if ! curl -o docker_install.sh "https://get.docker.com"; then  # 下载脚本
             echo "Failed to download docker_install.sh"; 
             exit 1; 
           fi
 
-      - name: 发布说明  # Prepare Release Notes
+      - name: Prepare Release Notes  # 准备发布说明和中文版本
         run: |
-          echo "Docker Installer 最新 LTS 稳定版本 ${{ env.version }}" > release_notes_zh.md  # 写入版本信息
-          echo "" >> release_notes_zh.md
-          for file in docker_desktop_installer_*.* docker_install.sh; do  # 遍历所有下载的文件
-            if [ -f "$file" ]; then  # 检查文件是否存在
-              size=$(du -h "$file" | cut -f1)  # 获取文件大小
-              echo "$file" >> release_notes_zh.md  # 写入文件名
-              echo "$size" >> release_notes_zh.md  # 写入文件大小
-              echo "$(date -r "$file" '+%Y-%m-%d %H:%M:%S')" >> release_notes_zh.md  # 写入文件修改日期
-            fi
+          for lang in "" "_zh"; do  # 创建英文和中文发布说明
+            file_suffix=${lang:-""}
+            echo "Docker Installer Latest LTS Stable Version ${{ env.version }}" > release_notes${file_suffix}.md  # 写入版本信息
+            echo "" >> release_notes${file_suffix}.md
+            for file in docker_desktop_installer_*.* docker_install.sh; do  # 遍历所有下载的文件
+              if [ -f "$file" ]; then  # 检查文件是否存在
+                size=$(du -h "$file" | cut -f1)  # 获取文件大小
+                echo "$file" >> release_notes${file_suffix}.md  # 写入文件名
+                echo "$size" >> release_notes${file_suffix}.md  # 写入文件大小
+                echo "$(date -r "$file" '+%Y-%m-%d %H:%M:%S')" >> release_notes${file_suffix}.md  # 写入文件修改日期
+              fi
+            done
+            cat release_notes${file_suffix}.md  # 输出发布说明文件内容
           done
-
-      - name: Prepare Release Notes  # 准备发布说明
-        run: |
-          echo "Docker Installer Latest LTS Stable Version ${{ env.version }}" > release_notes.md  # 写入版本信息
-          echo "" >> release_notes.md
-          for file in docker_desktop_installer_*.* docker_install.sh; do  # 遍历所有下载的文件
-            if [ -f "$file" ]; then  # 检查文件是否存在
-              size=$(du -h "$file" | cut -f1)  # 获取文件大小
-              echo "$file" >> release_notes.md  # 写入文件名
-              echo "$size" >> release_notes.md  # 写入文件大小
-              echo "$(date -r "$file" '+%Y-%m-%d %H:%M:%S')" >> release_notes.md  # 写入文件修改日期
-            fi
-          done
-          cat release_notes.md  # 输出发布说明文件内容
 
       - name: Create Release  # 创建发布
         id: release  # 设置此步骤的 ID
@@ -159,4 +153,4 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # GitHub Token
 
       - name: Output Release Notes  # 输出发布说明
-        run: cat release_notes_zh.md  # 打印发布说明内容
+        run: cat release_notes.md  # 打印发布说明内容
