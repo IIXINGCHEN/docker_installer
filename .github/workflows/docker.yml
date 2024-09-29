@@ -75,7 +75,7 @@ jobs:
           )
           
           for key in "${!installers[@]}"; do
-            file_name="docker_desktop_installer_${key}_$(date +%s)"
+            file_name="docker_desktop_installer_${key}"  # 删除时间戳部分
             case "$key" in
               "linux_debian"|"linux_ubuntu") file_name+=".deb" ;;
               "linux_fedora"|"linux_centos") file_name+=".rpm" ;;
@@ -105,12 +105,12 @@ jobs:
           body: "Release of Docker Installer latest LTS version for various platforms"
           files: |
             install_docker_server.sh
-            docker_desktop_installer_windows_latest.exe
-            docker_desktop_installer_mac_arm64_latest.dmg
-            docker_desktop_installer_mac_x86_64_latest.dmg
-            docker_desktop_installer_linux_debian_latest.deb
-            docker_desktop_installer_linux_fedora_latest.rpm
-            docker_desktop_installer_linux_centos_latest.rpm
-            docker_desktop_installer_linux_ubuntu_latest.deb
+            docker_desktop_installer_windows.exe
+            docker_desktop_installer_mac_arm64.dmg
+            docker_desktop_installer_mac_x86_64.dmg
+            docker_desktop_installer_linux_debian.deb
+            docker_desktop_installer_linux_fedora.rpm
+            docker_desktop_installer_linux_centos.rpm
+            docker_desktop_installer_linux_ubuntu.deb
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # GitHub 自动提供的 token
