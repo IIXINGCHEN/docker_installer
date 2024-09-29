@@ -63,9 +63,13 @@ jobs:
             curl -o "$file_name" "${installers[$key]}" || { echo "Failed to download $file_name"; exit 1; }
           done
 
-      - name: Release
+      - name: Create Release
+        id: release
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: "v1.0"  # 请根据需要修改标签名称
+          release_name: "Docker Installer Release v1.0"  # 发布名称
+          body: "Release of Docker Installer for various platforms"
           files: |
             install_docker_server.sh
             docker_desktop_installer_windows.exe
@@ -75,3 +79,5 @@ jobs:
             docker_desktop_installer_linux_fedora.rpm
             docker_desktop_installer_linux_centos.rpm
             docker_desktop_installer_linux_ubuntu.deb
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # GitHub 自动提供的 token
