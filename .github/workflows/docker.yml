@@ -18,7 +18,7 @@ jobs:
       - name: Set up environment
         run: |
           sudo apt-get update -y
-          sudo apt-get install -y curl jq
+          sudo apt-get install -y curl jq || { echo "Failed to install required packages"; exit 1; }
 
       - name: Check curl installation
         run: |
@@ -30,9 +30,9 @@ jobs:
       - name: Delete old release (v1.0)
         run: |
           echo "Deleting old release v1.0"
-          release_id=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
-            https://api.github.com/repos/${{ github.repository }}/releases/tags/v1.0 | \
-            jq -r .id)
+          release_response=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            https://api.github.com/repos/${{ github.repository }}/releases/tags/v1.0)
+          release_id=$(echo "$release_response" | jq -r .id)
 
           if [ "$release_id" != "null" ]; then
             curl -s -X DELETE -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
@@ -45,14 +45,16 @@ jobs:
       - name: Retrieve Latest Docker Version
         id: get_latest_version
         run: |
-          # 获取最新的 LTS Docker 版本
           latest_version=$(curl -s https://api.github.com/repos/docker/docker-ce/releases | 
                            jq -r '.[] | select(.prerelease == false) | .tag_name' | 
-                           grep -E '^[0-9]+.[0-9]+.[0-9]+' | head -n 1)
+                           grep -E '^[0-9]+.[0-9]+.[0-9]+' | head -n 1) || { echo "Failed to retrieve latest Docker version"; exit 1; }
+          if [ -z "$latest_version" ]; then
+            echo "No stable Docker version found, exiting."
+            exit 1
+          fi
           echo "Latest stable Docker version: $latest_version"
           echo "version=$latest_version" >> $GITHUB_ENV
 
-      # 下载 Docker shell 脚本
       - name: Download Docker shell script
         run: |
           curl -o install_docker_server.sh "https://get.docker.com" || {
@@ -60,7 +62,6 @@ jobs:
             exit 1; 
           }
 
-      # 定义下载链接的数组
       - name: Download desktop installers
         run: |
           declare -A installers
@@ -96,6 +97,12 @@ jobs:
               exit 1; 
             fi
           done
+
+      - name: Remove timestamped installer files
+        run: |
+          echo "Removing timestamped files..."
+          # 使用模式匹配删除带有时间戳的文件
+          find . -type f -name "docker_desktop_installer_*_*" -exec rm -f {} \;
 
       - name: Create Release
         id: release
