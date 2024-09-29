@@ -114,7 +114,7 @@ jobs:
             exit 1; 
           fi
 
-      - name: 准备发布说明  # Prepare Release Notes
+      - name: 发布说明  # Prepare Release Notes
         run: |
           echo "Docker Installer 最新 LTS 稳定版本 ${{ env.version }}" > release_notes_zh.md  # 写入版本信息
           echo "" >> release_notes_zh.md
@@ -124,6 +124,8 @@ jobs:
               echo "$file" >> release_notes_zh.md  # 写入文件名
               echo "$size" >> release_notes_zh.md  # 写入文件大小
               echo "$(date -r "$file" '+%Y-%m-%d %H:%M:%S')" >> release_notes_zh.md  # 写入文件修改日期
+            fi
+          done
 
       - name: Prepare Release Notes  # 准备发布说明
         run: |
@@ -135,6 +137,7 @@ jobs:
               echo "$file" >> release_notes.md  # 写入文件名
               echo "$size" >> release_notes.md  # 写入文件大小
               echo "$(date -r "$file" '+%Y-%m-%d %H:%M:%S')" >> release_notes.md  # 写入文件修改日期
+            fi
           done
           cat release_notes.md  # 输出发布说明文件内容
 
