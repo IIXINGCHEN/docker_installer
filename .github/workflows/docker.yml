@@ -20,20 +20,11 @@ jobs:
       - name: Set up environment  # 设置环境
         run: |
           sudo apt-get update -y  # 更新包列表
-          if ! sudo apt-get install -y curl jq; then  # 安装所需的包
-            echo "Failed to install required packages"; 
-            exit 1; 
-          fi
+          sudo apt-get install -y curl jq || { echo "Failed to install required packages"; exit 1; }  # 安装所需的包
 
       - name: Check curl installation  # 检查 curl 是否安装
         run: |
-          if ! command -v curl &> /dev/null; then  # 检查 curl 命令是否存在
-            echo "curl is not installed. Attempting to install." 
-            if ! sudo apt-get install -y curl; then  # 尝试安装 curl
-              echo "curl installation failed, exiting!"; 
-              exit 1; 
-            fi
-          fi
+          command -v curl &> /dev/null || { echo "curl is not installed. Attempting to install."; sudo apt-get install -y curl || { echo "curl installation failed, exiting!"; exit 1; }; }
 
       - name: Retrieve Latest Docker Version  # 获取最新 Docker 版本
         id: get_latest_version  # 设置此步骤的 ID
@@ -84,8 +75,9 @@ jobs:
               exit 1; 
             fi
             
-            if [ ! -f "$file_name" ]; then  # 检查文件是否存在
-              echo "$file_name does not exist after download"; 
+            # 检查下载文件的完整性
+            if [ ! -f "$file_name" ] || [ ! -s "$file_name" ]; then  # 检查文件是否存在且非空
+              echo "$file_name does not exist or is empty after download"; 
               exit 1; 
             fi
           done
@@ -97,21 +89,32 @@ jobs:
             exit 1; 
           fi
 
-      - name: Prepare Release Notes  # 准备发布说明和中文版本
+      - name: Prepare Release Notes  # 准备发布说明
         run: |
           for lang in "" "_zh"; do  # 创建英文和中文发布说明
             file_suffix=${lang:-""}
-            echo "Docker Installer Latest LTS Stable Version ${{ env.version }}" > release_notes${file_suffix}.md  # 写入版本信息
-            echo "" >> release_notes${file_suffix}.md
-            for file in docker_desktop_installer_*.* docker_install.sh; do  # 遍历所有下载的文件
+            release_note_file="release_notes${file_suffix}.md"  # 定义发布说明文件名
+            
+            echo "Docker Installer Latest LTS Stable Version ${{ env.version }}" > "$release_note_file"  # 写入版本信息
+            echo "" >> "$release_note_file"  # 添加空行
+
+            # 遍历所有下载的文件
+            for file in docker_desktop_installer_*.* docker_install.sh; do  
               if [ -f "$file" ]; then  # 检查文件是否存在
                 size=$(du -h "$file" | cut -f1)  # 获取文件大小
-                echo "$file" >> release_notes${file_suffix}.md  # 写入文件名
-                echo "$size" >> release_notes${file_suffix}.md  # 写入文件大小
-                echo "$(date -r "$file" '+%Y-%m-%d %H:%M:%S')" >> release_notes${file_suffix}.md  # 写入文件修改日期
+                modified_date=$(date -r "$file" '+%Y-%m-%d %H:%M:%S')  # 获取文件修改日期
+                
+                # 写入文件信息到发布说明
+                {
+                  echo "$file"   # 写入文件名
+                  echo "$size"   # 写入文件大小
+                  echo "$modified_date"  # 写入文件修改日期
+                  echo ""  # 添加空行
+                } >> "$release_note_file"
               fi
             done
-            cat release_notes${file_suffix}.md  # 输出发布说明文件内容
+            
+            cat "$release_note_file"  # 输出发布说明文件内容
           done
 
       - name: Create Release  # 创建发布
