@@ -45,9 +45,11 @@ jobs:
       - name: Retrieve Latest Docker Version
         id: get_latest_version
         run: |
+          # 获取最新的 LTS Docker 版本
           latest_version=$(curl -s https://api.github.com/repos/docker/docker-ce/releases | 
-                           jq -r '.[] | select(.prerelease == false) | .tag_name' | 
-                           grep -E '^[0-9]+.[0-9]+.[0-9]+' | head -n 1) || { echo "Failed to retrieve latest Docker version"; exit 1; }
+            jq -r '.[] | select(.prerelease == false and .tag_name | match("^[0-9]+\\.[0-9]+\\.[0-9]+$")) | .tag_name' | 
+            head -n 1) || { echo "Failed to retrieve latest Docker version"; exit 1; }
+
           if [ -z "$latest_version" ]; then
             echo "No stable Docker version found, exiting."
             exit 1
