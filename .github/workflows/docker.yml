@@ -45,12 +45,17 @@ jobs:
       - name: Retrieve Latest Docker Version
         id: get_latest_version
         run: |
-          # 调试输出
+          # 获取重定向后的 URL
+          redirect_url=$(curl -sI https://api.github.com/repos/docker/docker-ce/releases | grep -i '^location:' | awk '{print $2}' | tr -d '\r')
+          echo "Debug: Redirected URL: $redirect_url"
+
+          # 使用重定向后的 URL 获取发布信息
+          releases_info=$(curl -sL "$redirect_url")
           echo "Debug: Raw API response"
-          curl -s https://api.github.com/repos/docker/docker-ce/releases | jq '.'
+          echo "$releases_info" | jq '.'
 
           # 获取最新的 LTS Docker 版本
-          latest_version=$(curl -s https://api.github.com/repos/docker/docker-ce/releases | 
+          latest_version=$(echo "$releases_info" | 
             jq -r '[.[] | select(.prerelease == false and (.tag_name | test("^v?[0-9]+\\.[0-9]+\\.[0-9]+$"))) | .tag_name][0]') || 
             { echo "Failed to retrieve latest Docker version"; exit 1; }
 
