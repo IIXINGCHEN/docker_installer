@@ -27,6 +27,21 @@ jobs:
             sudo apt-get install -y curl || { echo "curl installation failed, exiting!" ; exit 1; }
           fi
 
+      - name: Delete old release (v1.0)
+        run: |
+          echo "Deleting old release v1.0"
+          release_id=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            https://api.github.com/repos/${{ github.repository }}/releases/tags/v1.0 | \
+            jq -r .id)
+          
+          if [ "$release_id" != "null" ]; then
+            curl -s -X DELETE -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+              https://api.github.com/repos/${{ github.repository }}/releases/$release_id
+            echo "Old release v1.0 deleted."
+          else
+            echo "Release v1.0 not found."
+          fi
+
       - name: Retrieve Latest Docker Version
         id: get_latest_version
         run: |
