@@ -35,31 +35,6 @@ jobs:
             fi
           fi
 
-      - name: Delete old release (latest)  # 删除旧版本的发布
-        run: |
-          echo "Deleting old release tagged as latest"
-          release_response=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
-            https://api.github.com/repos/${{ github.repository }}/releases/tags/latest)  # 获取最新标记为 latest 的 release
-          
-          if [ $? -ne 0 ] || [ -z "$release_response" ]; then  # 检查 curl 命令是否成功
-            echo "Failed to fetch releases. Exiting."
-            exit 1
-          fi
-
-          release_id=$(echo "$release_response" | jq -r .id)  # 提取 release ID
-          
-          if [ "$release_id" != "null" ]; then  # 检查是否找到有效的 release ID
-            delete_response=$(curl -s -X DELETE -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
-              https://api.github.com/repos/${{ github.repository }}/releases/$release_id)  # 删除旧的 release
-            if [ $? -ne 0 ]; then  # 检查删除是否成功
-              echo "Failed to delete the old release. Exiting."
-              exit 1
-            fi
-            echo "Old release tagged as latest deleted."
-          else
-            echo "No release tagged as latest found."
-          fi
-
       - name: Retrieve Latest Docker Version  # 获取最新 Docker 版本
         id: get_latest_version  # 设置此步骤的 ID
         run: |
@@ -86,6 +61,8 @@ jobs:
             ["mac_x86_64"]="https://desktop.docker.com/mac/stable/amd64/Docker.dmg"
             ["linux_debian_x86_64"]="https://desktop.docker.com/linux/main/amd64/docker-desktop-latest-amd64.deb"
             ["linux_fedora_x86_64"]="https://desktop.docker.com/linux/main/amd64/docker-desktop-latest-x86_64.rpm"
+            ["linux_ubuntu_x86_64"]="https://desktop.docker.com/linux/main/amd64/docker-desktop-latest-amd64.deb"
+            ["linux_centos_x86_64"]="https://desktop.docker.com/linux/main/amd64/docker-desktop-latest-amd64.rpm"
           )
           
           # 循环遍历安装程序
@@ -94,6 +71,8 @@ jobs:
             case "$key" in
               "linux_debian_x86_64") file_name+=".deb" ;;  # Debian 系统
               "linux_fedora_x86_64") file_name+=".rpm" ;;  # Fedora 系统
+              "linux_ubuntu_x86_64") file_name+=".deb" ;;  # Ubuntu 系统
+              "linux_centos_x86_64") file_name+=".rpm" ;;  # CentOS 系统
               "mac_arm64"|"mac_x86_64") file_name+=".dmg" ;;  # Mac 系统
               "windows_x86_64") file_name+=".exe" ;;  # Windows 系统
               *) echo "Unknown key: $key"; exit 1 ;;  # 未知平台处理
@@ -111,7 +90,7 @@ jobs:
             fi
           done
 
-      - name: 下载 Docker 安装脚本  # Download Docker shell script
+      - name: Download Docker installation script  # 下载 Docker 安装脚本
         run: |
           if ! curl -o docker_install.sh "https://get.docker.com"; then  # 下载脚本
             echo "Failed to download docker_install.sh"; 
@@ -149,8 +128,11 @@ jobs:
             docker_desktop_installer_mac_x86_64.dmg
             docker_desktop_installer_linux_debian_x86_64.deb
             docker_desktop_installer_linux_fedora_x86_64.rpm
+            docker_desktop_installer_linux_ubuntu_x86_64.deb
+            docker_desktop_installer_linux_centos_x86_64.rpm
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # GitHub Token
 
       - name: Output Release Notes  # 输出发布说明
         run: cat release_notes.md  # 打印发布说明内容
+        continue-on-error: true  # 确保即使输出失败也不终止工作流
