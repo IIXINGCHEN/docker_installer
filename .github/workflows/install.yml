@@ -68,7 +68,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: "latest"  # 请根据需要修改标签名称
-          release_name: "Docker Installer Release v1.0"  # 发布名称
+          release_name: "Docker Installer Release latest"  # 发布名称
           body: "Release of Docker Installer for various platforms"
           files: |
             install_docker_server.sh
