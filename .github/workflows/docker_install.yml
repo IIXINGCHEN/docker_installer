@@ -22,13 +22,17 @@ jobs:
           sudo apt-get update -y
           sudo apt-get install -y curl jq || { echo "Failed: Install required packages"; exit 1; }
 
-      - name: Retrieve Latest Docker Version
+      - name: Retrieve Latest Docker Version from Website
         id: get_latest_version
         run: |
-          echo "Fetching the latest Docker Desktop version..."
+          echo "Fetching the latest Docker Desktop version from website..."
 
-          # 从 macOS 的 VERSION 文件获取版本号（适用于所有平台的最新版本）
-          latest_version=$(curl -s https://desktop.docker.com/mac/stable/latest/VERSION)
+          # 获取 Docker Desktop 下载页面的 HTML
+          download_page=$(curl -s https://www.docker.com/products/docker-desktop)
+
+          # 使用 grep 和正则表达式提取版本号
+          # 请根据实际页面内容调整正则表达式
+          latest_version=$(echo "$download_page" | grep -oP 'Latest Version:\s*\K[0-9.]+' | head -n 1)
 
           echo "Extracted version: $latest_version"
 
@@ -111,7 +115,7 @@ jobs:
             file_suffix=${lang:-""}
             release_note_file="release_notes${file_suffix}.md"
 
-            echo "# Docker Installer Latest LTS Stable Version v${{ env.VERSION }}" > "$release_note_file"
+            echo "# Docker Installer Latest Stable Version v${{ env.VERSION }}" > "$release_note_file"
             echo "" >> "$release_note_file"
             echo "**Version:** v${{ env.VERSION }}" >> "$release_note_file"
             echo "" >> "$release_note_file"
@@ -142,7 +146,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: "v${{ env.VERSION }}" # 使用动态版本号
-          name: "Docker Installer Latest LTS Stable Version ${{ env.VERSION }}" # 发布名称
+          name: "Docker Installer Latest Stable Version ${{ env.VERSION }}" # 发布名称
           body_path: release_notes.md # 发布说明文件路径
           files: |
             docker_install.sh
