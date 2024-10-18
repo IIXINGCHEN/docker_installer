@@ -22,21 +22,30 @@ jobs:
           sudo apt-get update -y
           sudo apt-get install -y --no-install-recommends curl jq
 
-      - name: Retrieve Latest Docker Version  # 获取最新 Docker 版本
-        id: get_latest_version  # 步骤 ID
+      - name: Retrieve Latest Docker Version (Debug API Response)
         run: |
-          # 使用 GitHub API 获取 Docker CE 的最新版本
-          latest_version=$(curl -s https://api.github.com/repos/docker/docker-ce/releases/latest | jq -r .tag_name)
+          curl -s https://api.github.com/repos/docker/desktop/releases/latest > api_response.json
+          cat api_response.json
+
+      - name: Retrieve Latest Docker Version
+        id: get_latest_version
+        run: |
+          latest_version=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" https://api.github.com/repos/docker/desktop/releases/latest | jq -r .tag_name)
+
+          echo "API returned version: $latest_version"
 
           if [ -z "$latest_version" ] || [ "$latest_version" == "null" ]; then
             echo "No stable Docker version found, exiting."
             exit 1
           fi
 
-          echo "Latest stable Docker version: $latest_version"
           echo "version=$latest_version" >> $GITHUB_ENV
 
-      - name: Download Docker installation script & Installers  # 并行下载安装脚本和安装程序
+      - name: Verify Version
+        run: |
+          echo "Docker version: ${{ env.version }}"
+
+      - name: Download Desktop Installers  # 下载桌面安装程序
         run: |
           declare -A installers=(
             ["windows_x86_64"]="https://desktop.docker.com/win/stable/amd64/Docker%20Desktop%20Installer.exe"
@@ -47,31 +56,33 @@ jobs:
             ["linux_ubuntu_x86_64"]="https://desktop.docker.com/linux/main/amd64/docker-desktop-latest-amd64.deb"
             ["linux_centos_x86_64"]="https://desktop.docker.com/linux/main/amd64/docker-desktop-latest-amd64.rpm"
           )
-
-          # 下载安装脚本
-          curl -L -o docker_install.sh "https://get.docker.com" || { echo "Failed to download docker_install.sh"; exit 1; } &
-
-          # 下载安装程序
+          
           for key in "${!installers[@]}"; do
             url="${installers[$key]}"
             extension="${url##*.}"
             file_name="docker_desktop_installer_${key}.${extension}"
+            
             echo "Downloading $file_name from $url"
-            curl -L -o "$file_name" "$url" || { echo "Failed to download $file_name"; exit 1; } &
-          done
-
-          wait  # 等待所有后台下载完成
-
-          # 检查文件完整性
-          for key in "${!installers[@]}"; do
-            extension="${installers[$key]##*.}"
-            file_name="docker_desktop_installer_${key}.${extension}"
+            if ! curl -L -o "$file_name" "$url"; then
+              echo "Failed to download $file_name"
+              exit 1
+            fi
+            
+            # 检查文件完整性
             if [ ! -f "$file_name" ] || [ ! -s "$file_name" ]; then
               echo "$file_name does not exist or is empty after download"
               exit 1
             fi
           done
 
+      - name: Download Docker installation script  # 下载 Docker 安装脚本
+        run: |
+          if ! curl -L -o docker_install.sh "https://get.docker.com"; then
+            echo "Failed to download docker_install.sh"
+            exit 1
+          fi
+
+          # 检查文件完整性
           if [ ! -f "docker_install.sh" ] || [ ! -s "docker_install.sh" ]; then
             echo "docker_install.sh does not exist or is empty after download"
             exit 1
@@ -119,7 +130,7 @@ jobs:
             docker_desktop_installer_linux_ubuntu_x86_64.deb
             docker_desktop_installer_linux_centos_x86_64.rpm
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # GitHub Token
 
       - name: Output Release Notes  # 输出发布说明
         run: cat release_notes.md  # 打印发布说明内容
