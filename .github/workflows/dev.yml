@@ -6,45 +6,45 @@ on:
     - cron: '0 16 * * *'  # Runs daily at UTC 16:00
 
 permissions:
-  contents: write  # Allow content writing
-  packages: write  # Allow package writing
+  contents: read  # Least privilege principle
+  packages: write 
 
 jobs:
-  download_installer:  # Job name
+  download_and_release:
+    name: Download Docker Installers and Create Release
     runs-on: ubuntu-latest  # Running environment
 
     steps:
-      - name: Checkout repository  # Checkout the code repository
+      - name: Checkout Repository  # Checkout the code repository
         uses: actions/checkout@v4  # Use the GitHub checkout action
+        with:
+          fetch-depth: 1  # Reduce clone depth for speed
 
-      - name: Set up environment  # Set up environment
+      - name: Set Up Environment  # Set up environment
         run: |
-          sudo apt-get update -y  # Update package list
-          sudo apt-get install -y curl jq || { echo "Failed: Install required packages"; exit 1; }  # Install required packages
-      
-      - name: Check curl installation  # Check if curl is installed
+          sudo apt-get update -y && sudo apt-get install -y curl jq
+        # Combined update and install commands for efficiency
+
+      - name: Retrieve Latest Docker Version  # Get the latest Docker version
+        id: get_latest_version  # Set the ID for this step
         run: |
-          command -v curl &> /dev/null || { echo "curl is not installed, attempting to install"; sudo apt-get install -y curl || { echo "Failed: curl installation failed, exiting!"; exit 1; }; }
-      
-      - name: Retrieve Latest Docker Desktop Version from GitHub
-        id: get_latest_version
-        run: |
-          echo "Fetching the latest Docker Desktop version from GitHub..."
-          latest_version=$(curl -s https://api.github.com/repos/docker/desktop/releases/latest | grep -oP '"tag_name":\s*"\K[0-9]+\.[0-9]+\.[0-9]+')
-          
-          echo "Extracted version: $latest_version"
+          # Fetch the latest Docker LTS version
+          latest_version=$(curl -sL https://download.docker.com/linux/static/stable/x86_64/ | 
+            grep -oP 'docker-\K[0-9]+\.[0-9]+\.[0-9]+' | 
+            sort -V | 
+            tail -n 1)
           
           if [ -z "$latest_version" ]; then
-            echo "Failed to retrieve Docker Desktop version from GitHub, exiting."
+            echo "Error: Unable to retrieve the latest Docker version."
             exit 1
           fi
           
-          echo "version=$latest_version" >> $GITHUB_ENV
-      
-      - name: Download desktop installers  # Download desktop installers
+          echo "Latest stable Docker version: $latest_version"
+          echo "version=$latest_version" >> $GITHUB_ENV  # Save the version number to environment variables
+
+      - name: Download Desktop Installers  # Download desktop installers
         run: |
-          declare -A installers  # Declare an associative array
-          installers=(
+          declare -A installers=(
             ["windows_x86_64"]="https://desktop.docker.com/win/stable/amd64/Docker%20Desktop%20Installer.exe"
             ["mac_arm64"]="https://desktop.docker.com/mac/stable/arm64/Docker.dmg"
             ["mac_x86_64"]="https://desktop.docker.com/mac/stable/amd64/Docker.dmg"
@@ -56,78 +56,67 @@ jobs:
           
           # Loop through the installers
           for key in "${!installers[@]}"; do
-            file_name="docker_desktop_installer_${key}"  # Create file name
+            file_name="docker_desktop_installer_${key}"
             case "$key" in
-              "linux_debian_x86_64") file_name+=".deb" ;;  # Debian system
-              "linux_fedora_x86_64") file_name+=".rpm" ;;  # Fedora system
-              "linux_ubuntu_x86_64") file_name+=".deb" ;;  # Ubuntu system
-              "linux_centos_x86_64") file_name+=".rpm" ;;  # CentOS system
-              "mac_arm64"|"mac_x86_64") file_name+=".dmg" ;;  # Mac system
-              "windows_x86_64") file_name+=".exe" ;;  # Windows system
-              *) echo "Unknown platform: $key"; exit 1 ;;  # Unknown platform handling
+              "linux_debian_x86_64") file_extension=".deb" ;;
+              "linux_fedora_x86_64") file_extension=".rpm" ;;
+              "linux_ubuntu_x86_64") file_extension=".deb" ;;
+              "linux_centos_x86_64") file_extension=".rpm" ;;
+              "mac_arm64"|"mac_x86_64") file_extension=".dmg" ;;
+              "windows_x86_64") file_extension=".exe" ;;
+              *) echo "Unknown platform: $key"; exit 1 ;;
             esac
+            file_name+="$file_extension"
             
-            echo "Downloading $file_name from ${installers[$key]}"  # Output download information
-            if ! curl -L -o "$file_name" "${installers[$key]}"; then  # Download the file
-              echo "Failed to download $file_name"; 
-              exit 1; 
+            echo "Downloading $file_name from ${installers[$key]}"
+            if ! curl -L -o "$file_name" "${installers[$key]}"; then
+              echo "Failed to download $file_name"
+              exit 1
             fi
             
-            # Check the integrity of the downloaded file
-            if [ ! -f "$file_name" ] || [ ! -s "$file_name" ]; then  # Check if the file exists and is non-empty
-              echo "$file_name does not exist or is empty after download"; 
-              exit 1; 
+            # Check if the file exists and is non-empty
+            if [ ! -f "$file_name" ] || [ ! -s "$file_name" ]; then
+              echo "Error: $file_name does not exist or is empty after download."
+              exit 1
             fi
           done
-      
-      - name: Download Docker installation script  # Download Docker installation script
+
+      - name: Download Docker Installation Script  # Download Docker installation script
         run: |
-          if ! curl -o docker_install.sh "https://get.docker.com"; then  # Download the script
-            echo "Failed to download docker_install.sh"; 
-            exit 1; 
-          fi
-      
+          curl -sL -o docker_install.sh "https://get.docker.com" || { echo "Failed to download docker_install.sh"; exit 1; }
+
       - name: Prepare Release Notes  # Prepare release notes
         run: |
           for lang in "" "_zh"; do  # Create English and Chinese release notes
             file_suffix=${lang:-""}
-            release_note_file="release_notes${file_suffix}.md"  # Define release notes file name
+            release_note_file="release_notes${file_suffix}.md"
             
-            echo "# Docker Installer Latest LTS Stable Version v${{ env.version }}" > "$release_note_file"  # Write title
-            echo "" >> "$release_note_file"  # Add empty line
-            echo "**Version:** v${{ env.version }}" >> "$release_note_file"  # Write version information
-            echo "" >> "$release_note_file"  # Add empty line
-            
-            # Loop through all downloaded files
+            echo "# Docker Installer Latest LTS Stable Version" > "$release_note_file"
+            echo "" >> "$release_note_file"
+            echo "**Version:** v${{ env.version }}" >> "$release_note_file"
+            echo "" >> "$release_note_file"
             echo "| File Name | File Size | Modified Date |" >> "$release_note_file"
             echo "| ------ | -------- | -------- |" >> "$release_note_file"
+            
             for file in docker_desktop_installer_*.* docker_install.sh; do  
-              if [ -f "$file" ]; then  # Check if the file exists
-                size=$(du -h "$file" | cut -f1)  # Get file size
-                modified_date=$(date -r "$file" '+%Y-%m-%d %H:%M:%S')  # Get file modified date
-                
-                # Write file information to release notes
+              if [ -f "$file" ]; then
+                size=$(du -h "$file" | cut -f1)
+                modified_date=$(date -r "$file" '+%Y-%m-%d %H:%M:%S')
                 echo "| $file | $size | $modified_date |" >> "$release_note_file"
               fi
             done
             
-            echo "" >> "$release_note_file"  # Add empty line
-            
-            if [[ "$lang" == "_zh" ]]; then
-              echo "感谢您使用 Docker！如果您有任何问题，请参考官方文档或联系支持。" >> "$release_note_file"  # Add Chinese note
-            else
-              echo "Thank you for using Docker! If you have any questions, please refer to the official documentation or contact support." >> "$release_note_file"  # Add English note
-            fi
-            
+            echo "" >> "$release_note_file"
+            echo "Thank you for using Docker! If you have any questions, please refer to the official documentation or contact support." >> "$release_note_file"
             cat "$release_note_file"  # Output release notes file content
           done
-      
+
       - name: Create Release  # Create release
         id: release  # Set the ID for this step
         uses: softprops/action-gh-release@v2  # Use GitHub release action
         with:
-          tag_name: "v${{ env.version }}"  # Release tag name, e.g., v4.21.1
-          name: "Docker Installer Latest LTS Stable Version v${{ env.version }}"  # Release name
+          tag_name: "v${{ env.version }}"  # Use semantic versioning for the tag
+          name: "Docker Installer v${{ env.version }} - Latest LTS Stable"  # Release name
           body_path: release_notes.md  # Release notes file path
           files: |  # List of included files
             docker_install.sh
@@ -140,12 +129,7 @@ jobs:
             docker_desktop_installer_linux_centos_x86_64.rpm
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # GitHub Token
-      
+
       - name: Output Release Notes  # Output release notes
-        run: |
-          echo "English Release Notes:"
-          cat release_notes.md
-          echo ""
-          echo "中文 Release Notes:"
-          cat release_notes_zh.md
+        run: cat release_notes.md  # Print release notes content
         continue-on-error: true  # Ensure that the workflow does not terminate even if output fails
