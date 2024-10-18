@@ -1,61 +1,131 @@
-name: Docker CLI Latest Release
-
+name: Docker Installer Download # Workflow name
 on:
-  workflow_dispatch: # 手动触发
-  schedule:
-    - cron: '0 16 * * *' # 每天 UTC 16:00 运行
-
+  workflow_dispatch: # Allow manual triggering of the workflow
+  schedule: # Scheduled triggering of the workflow
+    - cron: '0 16 * * *' # Runs daily at UTC 16:00
 permissions:
-  contents: read
-  packages: write
+  contents: write # Allow content writing
+  packages: write # Allow package writing
 
 jobs:
-  download_cli:
-    runs-on: ubuntu-latest
+  download_installer: # Job name
+    runs-on: ubuntu-latest # Running environment
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - name: Checkout repository # Checkout the code repository
+        uses: actions/checkout@v4 # Use the GitHub checkout action
 
-      - name: Set up environment
+      - name: Set up environment # Set up environment
         run: |
-          sudo apt-get update -y
-          sudo apt-get install -y curl jq
+          sudo apt-get update -y || { echo "Failed to update package list"; exit 1; }
+          sudo apt-get install -y curl jq || { echo "Failed: Install required packages"; exit 1; } # Install required packages
 
-      - name: Retrieve Latest Docker CLI Version
-        id: get_latest_version
+      - name: Check curl installation # Check if curl is installed
         run: |
-          # 获取所有非预发布的发布
-          latest_version=$(curl -s -H "Authorization: token $GITHUB_TOKEN" -H "Accept: application/vnd.github.v3+json" https://api.github.com/repos/docker/cli/releases | jq -r '[.[] | select(.prerelease == false) | .tag_name] | sort -V | tail -n1')
-          echo "API returned version: $latest_version"
-          if [ -z "$latest_version" ] || [ "$latest_version" == "null" ]; then
+          command -v curl &> /dev/null || { 
+            echo "curl is not installed, attempting to install"; 
+            sudo apt-get install -y curl || { echo "Failed: curl installation failed, exiting!"; exit 1; }
+          }
+
+      - name: Retrieve Latest Docker Version # Get the latest Docker version
+        id: get_latest_version # Set the ID for this step
+        run: |
+          latest_version=$(curl -sL https://download.docker.com/linux/static/stable/x86_64/ | 
+          grep -oP 'docker-\K[0-9]+\.[0-9]+\.[0-9]+' | sort -V | tail -n 1)
+          
+          if [ -z "$latest_version" ]; then # Check if the version number was retrieved
             echo "No stable Docker version found, exiting."
             exit 1
           fi
-          echo "version=${latest_version#v}" >> $GITHUB_ENV
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          echo "Latest stable Docker version: $latest_version" # Output the latest version number
+          echo "version=$latest_version" >> $GITHUB_ENV # Save the version number to environment variables
 
-      - name: Verify Version
+      - name: Download desktop installers # Download desktop installers
         run: |
-          echo "Docker CLI version: ${{ env.version }}"
+          declare -A installers=(
+            ["windows_x86_64"]="https://desktop.docker.com/win/stable/amd64/Docker%20Desktop%20Installer.exe"
+            ["mac_arm64"]="https://desktop.docker.com/mac/stable/arm64/Docker.dmg"
+            ["mac_x86_64"]="https://desktop.docker.com/mac/stable/amd64/Docker.dmg"
+            ["linux_debian_x86_64"]="https://desktop.docker.com/linux/main/amd64/docker-desktop-latest-amd64.deb"
+            ["linux_fedora_x86_64"]="https://desktop.docker.com/linux/main/amd64/docker-desktop-latest-x86_64.rpm"
+            ["linux_ubuntu_x86_64"]="https://desktop.docker.com/linux/main/amd64/docker-desktop-latest-amd64.deb"
+            ["linux_centos_x86_64"]="https://desktop.docker.com/linux/main/amd64/docker-desktop-latest-amd64.rpm"
+          )
 
-      - name: Download Docker CLI Binary
+          for key in "${!installers[@]}"; do
+            file_name="docker_desktop_installer_${key}"
+            case "$key" in
+              "linux_debian_x86_64"|"linux_ubuntu_x86_64") file_name+=".deb" ;;
+              "linux_fedora_x86_64"|"linux_centos_x86_64") file_name+=".rpm" ;;
+              "mac_arm64"|"mac_x86_64") file_name+=".dmg" ;;
+              "windows_x86_64") file_name+=".exe" ;;
+              *) echo "Unknown platform: $key"; exit 1 ;;
+            esac
+
+            echo "Downloading $file_name from ${installers[$key]}"
+            if ! curl -L -o "$file_name" "${installers[$key]}"; then # Download the file
+              echo "Failed to download $file_name"
+              exit 1
+            fi
+
+            if [ ! -s "$file_name" ]; then # Check the integrity of the downloaded file
+              echo "$file_name does not exist or is empty after download"
+              exit 1
+            fi
+          done
+
+      - name: Download Docker installation script # Download Docker installation script
         run: |
-          # 假设您要下载特定版本的二进制文件
-          # 请根据实际情况调整下载 URL
-          download_url="https://github.com/docker/cli/releases/download/v${{ env.version }}/docker-${{ env.version }}.tgz"
-          echo "Downloading Docker CLI from $download_url"
-          curl -L -o docker-cli-${{ env.version }}.tgz "$download_url"
-          
-          # 检查文件完整性
-          if [ ! -f "docker-cli-${{ env.version }}.tgz" ] || [ ! -s "docker-cli-${{ env.version }}.tgz" ]; then
-            echo "Docker CLI binary not found or is empty after download"
+          if ! curl -o docker_install.sh "https://get.docker.com"; then # Download the script
+            echo "Failed to download docker_install.sh"
             exit 1
           fi
 
-      - name: Extract Docker CLI Binary
+      - name: Prepare Release Notes # Prepare release notes
         run: |
-          tar -xzf docker-cli-${{ env.version }}.tgz
-          # 假设解压后的文件路径，根据实际情况调整
-          ls -la docker-${{ env.version }}
+          for lang in "" "_zh"; do
+            file_suffix=${lang:-""}
+            release_note_file="release_notes${file_suffix}.md"
+
+            echo "# Docker Installer Latest LTS Stable Version" > "$release_note_file"
+            echo "" >> "$release_note_file"
+            echo "**Version:** v${{ env.version }}" >> "$release_note_file"
+            echo "" >> "$release_note_file"
+            echo "| File Name | File Size | Modified Date |" >> "$release_note_file"
+            echo "| ------ | -------- | -------- |" >> "$release_note_file"
+
+            for file in docker_desktop_installer_*.* docker_install.sh; do
+              if [ -f "$file" ]; then
+                size=$(du -h "$file" | cut -f1) # Get file size
+                modified_date=$(date -r "$file" '+%Y-%m-%d %H:%M:%S') # Get file modified date
+                echo "| $file | $size | $modified_date |" >> "$release_note_file"
+              fi
+            done
+            
+            echo "" >> "$release_note_file"
+            echo "Thank you for using Docker! If you have any questions, please refer to the official documentation or contact support." >> "$release_note_file"
+            cat "$release_note_file" # Output release notes file content
+          done
+
+      - name: Create Release # Create release
+        id: release # Set the ID for this step
+        uses: softprops/action-gh-release@v2 # Use GitHub release action
+        with:
+          tag_name: "latest" # Release tag name
+          name: "Docker Installer Latest LTS Stable Version ${{ env.version }}" # Release name
+          body_path: release_notes.md # Release notes file path
+          files: |
+            docker_install.sh
+            docker_desktop_installer_windows_x86_64.exe
+            docker_desktop_installer_mac_arm64.dmg
+            docker_desktop_installer_mac_x86_64.dmg
+            docker_desktop_installer_linux_debian_x86_64.deb
+            docker_desktop_installer_linux_fedora_x86_64.rpm
+            docker_desktop_installer_linux_ubuntu_x86_64.deb
+            docker_desktop_installer_linux_centos_x86_64.rpm
+          env:
+            GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # GitHub Token
+
+      - name: Output Release Notes # Output release notes
+        run: cat release_notes.md # Print release notes content
+        continue-on-error: true # Ensure that the workflow does not terminate even if output fails
