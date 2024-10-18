@@ -26,28 +26,16 @@ jobs:
         run: |
           command -v curl &> /dev/null || { echo "curl is not installed, attempting to install"; sudo apt-get install -y curl || { echo "Failed: curl installation failed, exiting!"; exit 1; }; }
       
-      - name: Debug Docker Download Page
-        run: |
-          echo "Fetching the Docker Desktop download page..."
-          download_page=$(curl -s -H "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64)" https://www.docker.com/products/docker-desktop)
-          
-          echo "===== Download Page Content Start ====="
-          echo "$download_page"
-          echo "===== Download Page Content End ====="
-          
-          # Save page content for next steps
-          echo "$download_page" > download_page.html
-      
-      - name: Retrieve Latest Docker Desktop Version from Website
+      - name: Retrieve Latest Docker Desktop Version from GitHub
         id: get_latest_version
         run: |
-          echo "Parsing the Docker Desktop download page for latest version..."
-          latest_version=$(grep -oP 'version-number">\K[0-9]+\.[0-9]+\.[0-9]+' download_page.html | head -n1)
+          echo "Fetching the latest Docker Desktop version from GitHub..."
+          latest_version=$(curl -s https://api.github.com/repos/docker/desktop/releases/latest | grep -oP '"tag_name":\s*"\K[0-9]+\.[0-9]+\.[0-9]+')
           
           echo "Extracted version: $latest_version"
           
           if [ -z "$latest_version" ]; then
-            echo "Failed to retrieve Docker Desktop version from website, exiting."
+            echo "Failed to retrieve Docker Desktop version from GitHub, exiting."
             exit 1
           fi
           
@@ -57,13 +45,13 @@ jobs:
         run: |
           declare -A installers  # Declare an associative array
           installers=(
-            ["windows_x86_64"]="https://desktop.docker.com/win/stable/${{ env.version }}/amd64/Docker%20Desktop%20Installer.exe"
-            ["mac_arm64"]="https://desktop.docker.com/mac/stable/${{ env.version }}/arm64/Docker.dmg"
-            ["mac_x86_64"]="https://desktop.docker.com/mac/stable/${{ env.version }}/amd64/Docker.dmg"
-            ["linux_debian_x86_64"]="https://desktop.docker.com/linux/main/${{ env.version }}/amd64/docker-desktop-latest-amd64.deb"
-            ["linux_fedora_x86_64"]="https://desktop.docker.com/linux/main/${{ env.version }}/x86_64/docker-desktop-latest-x86_64.rpm"
-            ["linux_ubuntu_x86_64"]="https://desktop.docker.com/linux/main/${{ env.version }}/amd64/docker-desktop-latest-amd64.deb"
-            ["linux_centos_x86_64"]="https://desktop.docker.com/linux/main/${{ env.version }}/amd64/docker-desktop-latest-amd64.rpm"
+            ["windows_x86_64"]="https://desktop.docker.com/win/stable/amd64/Docker%20Desktop%20Installer.exe"
+            ["mac_arm64"]="https://desktop.docker.com/mac/stable/arm64/Docker.dmg"
+            ["mac_x86_64"]="https://desktop.docker.com/mac/stable/amd64/Docker.dmg"
+            ["linux_debian_x86_64"]="https://desktop.docker.com/linux/main/amd64/docker-desktop-latest-amd64.deb"
+            ["linux_fedora_x86_64"]="https://desktop.docker.com/linux/main/amd64/docker-desktop-latest-x86_64.rpm"
+            ["linux_ubuntu_x86_64"]="https://desktop.docker.com/linux/main/amd64/docker-desktop-latest-amd64.deb"
+            ["linux_centos_x86_64"]="https://desktop.docker.com/linux/main/amd64/docker-desktop-latest-amd64.rpm"
           )
           
           # Loop through the installers
