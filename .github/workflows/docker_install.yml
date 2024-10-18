@@ -27,8 +27,13 @@ jobs:
         run: |
           echo "Fetching the latest Docker Desktop version from website..."
 
-          # 获取 Docker Desktop 下载页面的 HTML
-          download_page=$(curl -s https://www.docker.com/products/docker-desktop)
+          # 获取 Docker Desktop 下载页面的 HTML，设置 User-Agent
+          download_page=$(curl -s -H "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64)" https://www.docker.com/products/docker-desktop)
+
+          # 输出下载页面内容到日志中进行调试
+          echo "===== Download Page Content Start ====="
+          echo "$download_page"
+          echo "===== Download Page Content End ====="
 
           # 使用 grep 和正则表达式提取版本号
           # 请根据实际页面内容调整正则表达式
@@ -43,6 +48,7 @@ jobs:
 
           echo "VERSION=$latest_version" >> $GITHUB_ENV
 
+      # 其他步骤继续执行，如验证版本、下载安装包、创建发布等
       - name: Verify Version
         run: |
           echo "Docker version: ${{ env.VERSION }}"
