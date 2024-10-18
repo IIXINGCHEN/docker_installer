@@ -22,18 +22,15 @@ jobs:
           sudo apt-get update -y
           sudo apt-get install -y curl jq || { echo "Failed: Install required packages"; exit 1; }
 
-      # 移除冗余的 curl 检查步骤
-      # - name: Check curl installation
-      #   run: |
-      #     command -v curl &> /dev/null || { echo "curl is not installed, attempting to install"; sudo apt-get install -y curl || { echo "Failed: curl installation failed, exiting!"; exit 1; }; }
-
       - name: Retrieve Latest Docker Version
         id: get_latest_version
         run: |
-          echo "Fetching the latest Docker CLI release..."
-          latest_version=$(curl -s -H "Accept: application/vnd.github.v3+json" https://api.github.com/repos/docker/cli/releases/latest | jq -r .tag_name)
+          echo "Fetching the latest Docker Desktop release..."
+          response=$(curl -s -H "Accept: application/vnd.github.v3+json" -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" https://api.github.com/repos/docker/desktop/releases/latest)
+          echo "API Response: $response"
+          latest_version=$(echo "$response" | jq -r .tag_name)
 
-          echo "API returned version: $latest_version"
+          echo "Extracted version: $latest_version"
 
           if [[ -z "$latest_version" || "$latest_version" == "null" ]]; then
             echo "No stable Docker version found, exiting."
@@ -149,7 +146,7 @@ jobs:
         with:
           tag_name: "v${{ env.VERSION }}" # 使用动态版本号
           name: "Docker Installer Latest LTS Stable Version ${{ env.VERSION }}" # 发布名称
-          body_path: release_notes.md # 发布说明文件路径（可根据需要合并中英文说明）
+          body_path: release_notes.md # 发布说明文件路径
           files: |
             docker_install.sh
             docker_desktop_installer_windows_x86_64.exe
