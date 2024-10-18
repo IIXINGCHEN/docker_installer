@@ -25,26 +25,23 @@ jobs:
       - name: Retrieve Latest Docker Version
         id: get_latest_version
         run: |
-          echo "Fetching the latest Docker Desktop release..."
-          response=$(curl -s -H "Accept: application/vnd.github.v3+json" -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" https://api.github.com/repos/docker/desktop/releases/latest)
-          echo "API Response: $response"
-          latest_version=$(echo "$response" | jq -r .tag_name)
+          echo "Fetching the latest Docker Desktop version..."
+
+          # 从 macOS 的 VERSION 文件获取版本号（适用于所有平台的最新版本）
+          latest_version=$(curl -s https://desktop.docker.com/mac/stable/latest/VERSION)
 
           echo "Extracted version: $latest_version"
 
-          if [[ -z "$latest_version" || "$latest_version" == "null" ]]; then
-            echo "No stable Docker version found, exiting."
+          if [[ -z "$latest_version" ]]; then
+            echo "Failed to retrieve Docker version, exiting."
             exit 1
           fi
-
-          # 移除前缀 'v'，如果存在
-          latest_version=${latest_version#v}
 
           echo "VERSION=$latest_version" >> $GITHUB_ENV
 
       - name: Verify Version
         run: |
-          echo "Docker version: ${{ env.VERSION }}" # 修正环境变量名称
+          echo "Docker version: ${{ env.VERSION }}"
 
       - name: Download desktop installers
         run: |
