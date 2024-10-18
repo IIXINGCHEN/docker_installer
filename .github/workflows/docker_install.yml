@@ -1,36 +1,35 @@
-name: Docker Installer Download  # 工作流程名称
+name: Docker Installer Download
 
 on:
-  workflow_dispatch:  # 允许手动触发
-  schedule:  # 定时触发
-    - cron: '0 16 * * *'  # 每天 UTC 16:00 运行
+  workflow_dispatch: # 允许手动触发工作流程
+  schedule: 
+    - cron: '0 16 * * *' # 每天 UTC 16:00 运行
 
 permissions:
-  contents: write  # 允许写入内容
-  packages: write  # 允许写入包
+  contents: write # 允许写入内容
+  packages: write # 允许写入包
 
 jobs:
-  download_installer:  # 作业名称
-    runs-on: ubuntu-latest  # 运行环境
+  download_installer:
+    runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repository  # 检出代码库
+      - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Install required packages  # 安装所需包
+      - name: Set up environment
         run: |
           sudo apt-get update -y
-          sudo apt-get install -y --no-install-recommends curl jq
+          sudo apt-get install -y curl jq || { echo "Failed: Install required packages"; exit 1; }
 
-      - name: Retrieve Latest Docker Version (Debug API Response)
+      - name: Check curl installation
         run: |
-          curl -s https://api.github.com/repos/docker/desktop/releases/latest > api_response.json
-          cat api_response.json
+          command -v curl &> /dev/null || { echo "curl is not installed, attempting to install"; sudo apt-get install -y curl || { echo "Failed: curl installation failed, exiting!"; exit 1; }; }
 
       - name: Retrieve Latest Docker Version
         id: get_latest_version
         run: |
-          latest_version=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" https://api.github.com/repos/docker/desktop/releases/latest | jq -r .tag_name)
+          latest_version=$(curl -s -H "Accept: application/vnd.github.v3+json" https://api.github.com/repos/docker/cli/releases/latest | jq -r .tag_name)
 
           echo "API returned version: $latest_version"
 
@@ -39,13 +38,16 @@ jobs:
             exit 1
           fi
 
+          # 移除前缀 'v'，如果存在
+          latest_version=${latest_version#v}
+
           echo "version=$latest_version" >> $GITHUB_ENV
 
       - name: Verify Version
         run: |
           echo "Docker version: ${{ env.version }}"
 
-      - name: Download Desktop Installers  # 下载桌面安装程序
+      - name: Download desktop installers
         run: |
           declare -A installers=(
             ["windows_x86_64"]="https://desktop.docker.com/win/stable/amd64/Docker%20Desktop%20Installer.exe"
@@ -56,18 +58,35 @@ jobs:
             ["linux_ubuntu_x86_64"]="https://desktop.docker.com/linux/main/amd64/docker-desktop-latest-amd64.deb"
             ["linux_centos_x86_64"]="https://desktop.docker.com/linux/main/amd64/docker-desktop-latest-amd64.rpm"
           )
-          
+
           for key in "${!installers[@]}"; do
-            url="${installers[$key]}"
-            extension="${url##*.}"
-            file_name="docker_desktop_installer_${key}.${extension}"
-            
-            echo "Downloading $file_name from $url"
-            if ! curl -L -o "$file_name" "$url"; then
+            file_name="docker_desktop_installer_${key}"
+
+            case "$key" in
+              "linux_debian_x86_64"|"linux_ubuntu_x86_64")
+                file_name+=".deb"
+                ;;
+              "linux_fedora_x86_64"|"linux_centos_x86_64")
+                file_name+=".rpm"
+                ;;
+              "mac_arm64"|"mac_x86_64")
+                file_name+=".dmg"
+                ;;
+              "windows_x86_64")
+                file_name+=".exe"
+                ;;
+              *)
+                echo "Unknown platform: $key"
+                exit 1
+                ;;
+            esac
+
+            echo "Downloading $file_name from ${installers[$key]}"
+            if ! curl -L -o "$file_name" "${installers[$key]}"; then
               echo "Failed to download $file_name"
               exit 1
             fi
-            
+
             # 检查文件完整性
             if [ ! -f "$file_name" ] || [ ! -s "$file_name" ]; then
               echo "$file_name does not exist or is empty after download"
@@ -75,7 +94,7 @@ jobs:
             fi
           done
 
-      - name: Download Docker installation script  # 下载 Docker 安装脚本
+      - name: Download Docker installation script
         run: |
           if ! curl -L -o docker_install.sh "https://get.docker.com"; then
             echo "Failed to download docker_install.sh"
@@ -88,39 +107,46 @@ jobs:
             exit 1
           fi
 
-      - name: Prepare Release Notes  # 准备发布说明
+      - name: Prepare Release Notes
         run: |
-          release_note_file="release_notes.md"
+          for lang in "" "_zh"; do
+            file_suffix=${lang:-""}
+            release_note_file="release_notes${file_suffix}.md"
 
-          echo "# Docker Installer Latest LTS Stable Version" > "$release_note_file"
-          echo "" >> "$release_note_file"
-          echo "**Version:** ${{ env.version }}" >> "$release_note_file"
-          echo "" >> "$release_note_file"
+            echo "# Docker Installer Latest LTS Stable Version v${{ env.version }}" > "$release_note_file"
+            echo "" >> "$release_note_file"
+            echo "**Version:** v${{ env.version }}" >> "$release_note_file"
+            echo "" >> "$release_note_file"
 
-          echo "| File Name | File Size | Modified Date |" >> "$release_note_file"
-          echo "| --------- | --------- | ------------- |" >> "$release_note_file"
+            echo "| File Name | File Size | Modified Date |" >> "$release_note_file"
+            echo "| ------ | -------- | -------- |" >> "$release_note_file"
 
-          for file in docker_desktop_installer_*.* docker_install.sh; do
-            if [ -f "$file" ]; then
-              size=$(du -h "$file" | cut -f1)
-              modified_date=$(date -r "$file" '+%Y-%m-%d %H:%M:%S')
-              echo "| $file | $size | $modified_date |" >> "$release_note_file"
+            for file in docker_desktop_installer_*.* docker_install.sh; do
+              if [ -f "$file" ]; then
+                size=$(du -h "$file" | cut -f1)
+                modified_date=$(date -r "$file" '+%Y-%m-%d %H:%M:%S')
+                echo "| $file | $size | $modified_date |" >> "$release_note_file"
+              fi
+            done
+
+            echo "" >> "$release_note_file"
+            if [ "$lang" == "_zh" ]; then
+              echo "感谢您使用 Docker！如果您有任何问题，请参考官方文档或联系支持。" >> "$release_note_file"
+            else
+              echo "Thank you for using Docker! If you have any questions, please refer to the official documentation or contact support." >> "$release_note_file"
             fi
+
+            cat "$release_note_file"
           done
 
-          echo "" >> "$release_note_file"
-          echo "Thank you for using Docker! If you have any questions, please refer to the official documentation or contact support." >> "$release_note_file"
-
-          cat "$release_note_file"
-
-      - name: Create Release  # 创建发布
-        id: release  # 步骤 ID
+      - name: Create Release
+        id: release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: "${{ env.version }}"  # 使用版本号作为标签名
-          name: "Docker Installer Latest LTS Stable Version ${{ env.version }}"  # 发布名称
-          body_path: release_notes.md  # 发布说明文件路径
-          files: |  # 发布文件列表
+          tag_name: "v${{ env.version }}" # 使用动态版本号
+          name: "Docker Installer Latest LTS Stable Version ${{ env.version }}" # 发布名称
+          body_path: release_notes.md # 发布说明文件路径
+          files: |
             docker_install.sh
             docker_desktop_installer_windows_x86_64.exe
             docker_desktop_installer_mac_arm64.dmg
@@ -130,7 +156,10 @@ jobs:
             docker_desktop_installer_linux_ubuntu_x86_64.deb
             docker_desktop_installer_linux_centos_x86_64.rpm
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # GitHub Token
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Output Release Notes  # 输出发布说明
-        run: cat release_notes.md  # 打印发布说明内容
+      - name: Output Release Notes
+        run: |
+          cat release_notes.md
+          cat release_notes_zh.md
+        continue-on-error: true # 确保即使输出失败，工作流程也不会终止
