@@ -30,13 +30,13 @@ jobs:
       - name: Get Latest Docker Version
         id: get_latest_version
         run: |
-          # 获取最新 Docker 版本（假设通过某 API 获取）
-          latest_version=$(curl -s https://api.example.com/docker/latest-version)  # 请根据实际 API 修改
-          if [ -z "$latest_version" ]; then
+          # 使用 GitHub Releases API 获取最新 Docker Desktop 版本
+          latest_version=$(curl -s https://api.github.com/repos/docker/desktop/releases/latest | jq -r '.tag_name')
+          if [ -z "$latest_version" ] || [ "$latest_version" == "null" ]; then
             echo "No stable Docker version found. Exiting."
             exit 1
           fi
-          echo "version=$latest_version" >>$GITHUB_OUTPUT  # 设置步骤输出
+          echo "version=${latest_version#v}" >>$GITHUB_OUTPUT  # 去掉版本前的 'v'，如 'v4.9.1'  -> '4.9.1'
 
   download_installers:
     name: Download Installers
@@ -94,7 +94,7 @@ jobs:
             echo ""
             echo "| File Name | File Size | Modified Date |"
             echo "| --------- | --------- | ------------- |"
-            
+
             # 明确列出需要包含的文件
             for filename in \
               docker_desktop_installer_linux_centos_x86_64.rpm \
@@ -105,7 +105,7 @@ jobs:
               docker_desktop_installer_mac_x86_64.dmg \
               docker_desktop_installer_windows_x86_64.exe \
               docker_install.sh; do
-              
+
               file="$INSTALLERS_DIR/$filename"
               if [ -f "$file" ]; then
                 size=$(du -h "$file" | awk '{print $1}')
@@ -132,7 +132,7 @@ jobs:
               docker_desktop_installer_mac_x86_64.dmg \
               docker_desktop_installer_windows_x86_64.exe \
               docker_install.sh; do
-              
+
               file="$INSTALLERS_DIR/$filename"
               if [ -f "$file" ]; then
                 size=$(du -h "$file" | awk '{print $1}')
@@ -146,10 +146,10 @@ jobs:
             # 添加源代码链接
             echo "Source code"
             echo "(zip)"
-            echo "$(date '+%b %d')"  # 示例日期，可根据需要调整
+            echo "[Download Source Code (zip)](https://github.com/your-repo/archive/refs/tags/v${VERSION}.zip)"
             echo "Source code"
             echo "(tar.gz)"
-            echo "$(date '+%b %d')"
+            echo "[Download Source Code (tar.gz)](https://github.com/your-repo/archive/refs/tags/v${VERSION}.tar.gz)"
           } > "$release_file"
 
           echo "Release notes generated: $release_file"
