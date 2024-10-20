@@ -97,7 +97,7 @@ jobs:
       - name: Verify Docker Installation Script Integrity  # 验证安装脚本完整性
         run: |
           # 定义预期的 SHA256 哈希值
-          EXPECTED_SHA256="your_predefined_sha256_hash_here"
+          EXPECTED_SHA256="30ed94ca4603d62f2e4c551615c5cf7cbccdd3158f4e8c2ac5b89fdbf65fadd5"
 
           # 计算下载文件的 SHA256 哈希值
           ACTUAL_SHA256=$(sha256sum docker_install.sh | awk '{print$1}')
