@@ -6,8 +6,10 @@ on:
     - cron: '0 16 * * *'  # 每天 UTC 时间 16:00 运行
 
 permissions:
-  contents: write      # 允许读取和写入仓库内容
-  packages: write      # 允许发布包
+  contents: write      # 读取和写入仓库内容
+  packages: write      # 发布包
+  issues: write        # 创建讨论或问题（用于发布通知，可选）
+  statuses: write      # 更新状态（可选）
 
 env:
   INSTALLERS_DIR: installers  # 存储安装包的目录
@@ -36,7 +38,10 @@ jobs:
             echo "No stable Docker version found. Exiting."
             exit 1
           fi
-          echo "version=${latest_version#v}" >>$GITHUB_OUTPUT  # 去掉版本前的 'v'，如 'v4.9.1'  -> '4.9.1'
+          # 去掉版本前的 'v'，如 'v4.9.1'  -> '4.9.1'
+          clean_version="${latest_version#v}"
+          echo "version=$clean_version" >>$GITHUB_OUTPUT
+          echo "Latest Docker Version: $clean_version"
 
   download_installers:
     name: Download Installers
@@ -51,6 +56,9 @@ jobs:
           mkdir -p $INSTALLERS_DIR
 
       - name: Download Docker Desktop Installers
+        env:
+          LATEST_VERSION: ${{ needs.setup_environment.outputs.latest_version }}
+          INSTALLERS_DIR: $INSTALLERS_DIR
         run: |
           declare -A installers=(
             ["docker_install.sh"]="https://get.docker.com"
@@ -84,13 +92,15 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Generate Release Notes
+        env:
+          INSTALLERS_DIR: $INSTALLERS_DIR
+          LATEST_VERSION: ${{ needs.setup_environment.outputs.latest_version }}
         run: |
-          VERSION="${{ needs.setup_environment.outputs.latest_version }}"
           release_file="release_notes.md"
 
           {
-            echo "Docker Installer Latest LTS Stable Version"
-            echo "Version: v${VERSION}"
+            echo "# Docker Installer Latest LTS Stable Version"
+            echo "## Version: v${LATEST_VERSION}"
             echo ""
             echo "| File Name | File Size | Modified Date |"
             echo "| --------- | --------- | ------------- |"
@@ -118,9 +128,9 @@ jobs:
             done
 
             echo ""
-            echo "Thank you for using Docker! If you have any questions, please refer to the official documentation or contact support."
+            echo "Thank you for using Docker! If you have any questions, please refer to the [official documentation](https://docs.docker.com/) or contact support."
             echo ""
-            echo "Assets 10"
+            echo "## Assets"
 
             # 列出每个资产的信息
             for filename in \
@@ -136,26 +146,21 @@ jobs:
               file="$INSTALLERS_DIR/$filename"
               if [ -f "$file" ]; then
                 size=$(du -h "$file" | awk '{print $1}')
-                # 由于 GitHub Actions 无法实时获取上传时间，这里使用相对时间
-                echo "$filename"
-                echo "$size"
-                echo "a few minutes ago"
+                echo "- **$filename** -$size"
               fi
             done
 
             # 添加源代码链接
-            echo "Source code"
-            echo "(zip)"
-            echo "[Download Source Code (zip)](https://github.com/your-repo/archive/refs/tags/v${VERSION}.zip)"
-            echo "Source code"
-            echo "(tar.gz)"
-            echo "[Download Source Code (tar.gz)](https://github.com/your-repo/archive/refs/tags/v${VERSION}.tar.gz)"
+            echo ""
+            echo "## Source Code"
+            echo "- [Download Source Code (zip)](https://github.com/your-username/your-repo/archive/refs/tags/v${LATEST_VERSION}.zip)"
+            echo "- [Download Source Code (tar.gz)](https://github.com/your-username/your-repo/archive/refs/tags/v${LATEST_VERSION}.tar.gz)"
           } > "$release_file"
 
           echo "Release notes generated: $release_file"
 
-      - name: Upload Release Notes as Artifacts
-        uses: actions/upload-artifact@v4  # 使用最新版本
+      - name: Upload Release Notes as Artifact
+        uses: actions/upload-artifact@v4
         with:
           name: release_notes
           path: release_notes.md
@@ -179,14 +184,14 @@ jobs:
           name: "Docker Installer Latest LTS Stable Version v${{ needs.setup_environment.outputs.latest_version }}"
           body_path: release_notes.md
           files: |
-            $INSTALLERS_DIR/docker_install.sh
-            $INSTALLERS_DIR/docker_desktop_installer_windows_x86_64.exe
-            $INSTALLERS_DIR/docker_desktop_installer_mac_arm64.dmg
-            $INSTALLERS_DIR/docker_desktop_installer_mac_x86_64.dmg
-            $INSTALLERS_DIR/docker_desktop_installer_linux_debian_x86_64.deb
-            $INSTALLERS_DIR/docker_desktop_installer_linux_fedora_x86_64.rpm
-            $INSTALLERS_DIR/docker_desktop_installer_linux_ubuntu_x86_64.deb
-            $INSTALLERS_DIR/docker_desktop_installer_linux_centos_x86_64.rpm
+            ${{ env.INSTALLERS_DIR }}/docker_install.sh
+            ${{ env.INSTALLERS_DIR }}/docker_desktop_installer_windows_x86_64.exe
+            ${{ env.INSTALLERS_DIR }}/docker_desktop_installer_mac_arm64.dmg
+            ${{ env.INSTALLERS_DIR }}/docker_desktop_installer_mac_x86_64.dmg
+            ${{ env.INSTALLERS_DIR }}/docker_desktop_installer_linux_debian_x86_64.deb
+            ${{ env.INSTALLERS_DIR }}/docker_desktop_installer_linux_fedora_x86_64.rpm
+            ${{ env.INSTALLERS_DIR }}/docker_desktop_installer_linux_ubuntu_x86_64.deb
+            ${{ env.INSTALLERS_DIR }}/docker_desktop_installer_linux_centos_x86_64.rpm
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
