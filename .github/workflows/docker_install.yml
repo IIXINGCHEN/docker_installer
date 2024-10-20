@@ -1,47 +1,58 @@
-name: Docker Installer Download  # Workflow name
+name: Docker Installer Download  # 工作流名称
 
 on:
-  workflow_dispatch:  # Allow manual triggering of the workflow
-  schedule:  # Scheduled triggering of the workflow
-    - cron: '0 16 * * *'  # Runs daily at UTC 16:00
+  workflow_dispatch:  # 允许手动触发工作流
+  schedule:  # 定时触发工作流
+    - cron: '0 16 * * *'  # 每天 UTC 16:00 运行
 
 permissions:
-  contents: write  # Allow content writing
-  packages: write  # Allow package writing
+  contents: write  # 允许写入内容
+  packages: write  # 允许写入包
 
 jobs:
-  download_installer:  # Job name
-    runs-on: ubuntu-latest  # Running environment
+  download_installer:  # 任务名称
+    runs-on: ubuntu-latest  # 运行环境
 
     steps:
-      - name: Checkout repository  # Checkout the code repository
-        uses: actions/checkout@v4  # Use the GitHub checkout action
+      - name: Checkout repository  # 检出代码库
+        uses: actions/checkout@v4.4.0  # 使用最新的 GitHub checkout 动作
 
-      - name: Set up environment  # Set up environment
+      - name: Set up environment  # 设置环境
         run: |
-          sudo apt-get update -y  # Update package list
-          sudo apt-get install -y curl jq || { echo "Failed: Install required packages"; exit 1; }  # Install required packages
-      - name: Check curl installation  # Check if curl is installed
+          sudo apt-get update -y  # 更新包列表
+          sudo apt-get install -y curl jq  # 安装必需的软件包
+
+      - name: Retrieve Latest Docker Version  # 获取最新 Docker 版本
+        id: get_latest_version  # 设置此步骤的 ID
         run: |
-          command -v curl &> /dev/null || { echo "curl is not installed, attempting to install"; sudo apt-get install -y curl || { echo "Failed: curl installation failed, exiting!"; exit 1; }; }
-      - name: Retrieve Latest Docker Version  # Get the latest Docker version
-        id: get_latest_version  # Set the ID for this step
-        run: |
-          # Get the latest LTS Docker version
+          # 从 Docker 的下载页面获取最新的稳定版本号
           latest_version=$(curl -sL https://download.docker.com/linux/static/stable/x86_64/ | 
             grep -oP 'docker-\K[0-9]+\.[0-9]+\.[0-9]+' | 
             sort -V | 
-            tail -n 1)  # Get the latest version number from Docker's download page
-          if [ -z "$latest_version" ]; then  # Check if the version number was retrieved
+            tail -n 1)
+          
+          if [ -z "$latest_version" ]; then
             echo "No stable Docker version found, exiting."
             exit 1
           fi
-          echo "Latest stable Docker version: $latest_version"  # Output the latest version number
-          echo "version=$latest_version" >> $GITHUB_ENV  # Save the version number to environment variables
-      - name: Download desktop installers  # Download desktop installers
+          
+          echo "Latest stable Docker version: $latest_version"
+          echo "version=$latest_version" >>$GITHUB_ENV  # 将版本号保存到环境变量
+
+      - name: Restore Installers Cache  # 恢复安装包缓存
+        uses: actions/cache@v3.16.0  # 使用最新的 actions/cache@v3 版本
+        with:
+          path: installers/  # 缓存路径
+          key: docker-installers-${{ env.version }}  # 缓存键，由版本号决定
+          restore-keys: |
+            docker-installers-
+
+      - name: Download Docker Installers  # 下载 Docker 安装包
         run: |
-          declare -A installers  # Declare an associative array
-          installers=(
+          INSTALLER_DIR="installers"
+          mkdir -p "$INSTALLER_DIR"  # 创建安装包目录
+          
+          declare -A installers=(
             ["windows_x86_64"]="https://desktop.docker.com/win/stable/amd64/Docker%20Desktop%20Installer.exe"
             ["mac_arm64"]="https://desktop.docker.com/mac/stable/arm64/Docker.dmg"
             ["mac_x86_64"]="https://desktop.docker.com/mac/stable/amd64/Docker.dmg"
@@ -51,83 +62,114 @@ jobs:
             ["linux_centos_x86_64"]="https://desktop.docker.com/linux/main/amd64/docker-desktop-latest-amd64.rpm"
           )
           
-          # Loop through the installers
           for key in "${!installers[@]}"; do
-            file_name="docker_desktop_installer_${key}"  # Create file name
-            case "$key" in
-              "linux_debian_x86_64") file_name+=".deb" ;;  # Debian system
-              "linux_fedora_x86_64") file_name+=".rpm" ;;  # Fedora system
-              "linux_ubuntu_x86_64") file_name+=".deb" ;;  # Ubuntu system
-              "linux_centos_x86_64") file_name+=".rpm" ;;  # CentOS system
-              "mac_arm64"|"mac_x86_64") file_name+=".dmg" ;;  # Mac system
-              "windows_x86_64") file_name+=".exe" ;;  # Windows system
-              *) echo "Unknown platform: $key"; exit 1 ;;  # Unknown platform handling
-            esac
+            url="${installers[$key]}"
+            extension="${url##*.}"
+            file_name="docker_desktop_installer_${key}.${extension}"
+            file_path="$INSTALLER_DIR/$file_name"
             
-            echo "Downloading $file_name from ${installers[$key]}"  # Output download information
-            if ! curl -L -o "$file_name" "${installers[$key]}"; then  # Download the file
-              echo "Failed to download $file_name"; 
-              exit 1; 
+            if [ -f "$file_path" ]; then
+              echo "$file_name 已存在于缓存中，跳过下载。"
+              continue
             fi
             
-            # Check the integrity of the downloaded file
-            if [ ! -f "$file_name" ] || [ ! -s "$file_name" ]; then  # Check if the file exists and is non-empty
-              echo "$file_name does not exist or is empty after download"; 
-              exit 1; 
+            echo "正在从 $url 下载$file_name"
+            curl -L -o "$file_path" "$url" || { echo "下载 $file_name 失败"; exit 1; }
+            
+            # 验证下载文件
+            if [ ! -s "$file_path" ]; then
+              echo "$file_name 下载失败或文件为空"
+              exit 1
             fi
           done
-      - name: Download Docker installation script  # Download Docker installation script
+
+      - name: Save Installers Cache  # 保存安装包到缓存
+        uses: actions/cache@v3.16.0  # 使用最新的 actions/cache@v3 版本
+        with:
+          path: installers/  # 缓存路径
+          key: docker-installers-${{ env.version }}  # 缓存键，与恢复时相同
+          restore-keys: |
+            docker-installers-
+
+      - name: Download Docker Installation Script  # 下载 Docker 安装脚本
         run: |
-          if ! curl -o docker_install.sh "https://get.docker.com"; then  # Download the script
-            echo "Failed to download docker_install.sh"; 
-            exit 1; 
+          SCRIPT_URL="https://get.docker.com"
+          SCRIPT_FILE="docker_install.sh"
+          echo "正在下载 Docker 安装脚本 $SCRIPT_URL"
+          curl -sL -o "$SCRIPT_FILE" "$SCRIPT_URL" || { echo "下载 $SCRIPT_FILE 失败"; exit 1; }
+
+      - name: Verify Docker Installation Script Integrity  # 验证安装脚本完整性
+        run: |
+          # 定义预期的 SHA256 哈希值
+          EXPECTED_SHA256="30ed94ca4603d62f2e4c551615c5cf7cbccdd3158f4e8c2ac5b89fdbf65fadd5"
+
+          # 计算下载文件的 SHA256 哈希值
+          ACTUAL_SHA256=$(sha256sum docker_install.sh | awk '{print$1}')
+
+          echo "预期 SHA256: $EXPECTED_SHA256"
+          echo "实际 SHA256:   $ACTUAL_SHA256"
+
+          if [ "$EXPECTED_SHA256" != "$ACTUAL_SHA256" ]; then
+            echo "SHA256 校验失败！脚本文件可能被篡改。"
+            exit 1
+          else
+            echo "SHA256 校验成功。"
           fi
-      - name: Prepare Release Notes  # Prepare release notes
+
+      - name: Prepare Release Notes  # 准备发布说明
         run: |
-          for lang in "" "_zh"; do  # Create English and Chinese release notes
-            file_suffix=${lang:-""}
-            release_note_file="release_notes${file_suffix}.md"  # Define release notes file name
-            
-            echo "# Docker Installer Latest LTS Stable Version" > "$release_note_file"  # Write title
-            echo "" >> "$release_note_file"  # Add empty line
-            echo "**Version:** v${{ env.version }}" >> "$release_note_file"  # Write version information
-            echo "" >> "$release_note_file"  # Add empty line
-            # Loop through all downloaded files
+          generate_release_notes() {
+            local lang_suffix=$1
+            local release_note_file="release_notes${lang_suffix}.md"
+
+            echo "# Docker Installer Latest LTS Stable Version" > "$release_note_file"
+            echo "" >> "$release_note_file"
+            echo "**Version:** v${{ env.version }}" >> "$release_note_file"
+            echo "" >> "$release_note_file"
             echo "| File Name | File Size | Modified Date |" >> "$release_note_file"
-            echo "| ------ | -------- | -------- |" >> "$release_note_file"
-            for file in docker_desktop_installer_*.* docker_install.sh; do  
-              if [ -f "$file" ]; then  # Check if the file exists
-                size=$(du -h "$file" | cut -f1)  # Get file size
-                modified_date=$(date -r "$file" '+%Y-%m-%d %H:%M:%S')  # Get file modified date
-                
-                # Write file information to release notes
-                echo "| $file | $size | $modified_date |" >> "$release_note_file"
+            echo "| --- | --- | --- |" >> "$release_note_file"
+            
+            for file in installers/docker_desktop_installer_*.* docker_install.sh; do
+              if [ -f "$file" ]; then
+                size=$(du -h "$file" | cut -f1)
+                modified_date=$(date -r "$file" '+%Y-%m-%d %H:%M:%S')
+                echo "| $(basename "$file") | $size |$modified_date |" >> "$release_note_file"
               fi
             done
             
-            echo "" >> "$release_note_file"  # Add empty line
-            echo "Thank you for using Docker! If you have any questions, please refer to the official documentation or contact support." >> "$release_note_file"  # Add note
-            cat "$release_note_file"  # Output release notes file content
-          done
-      - name: Create Release  # Create release
-        id: release  # Set the ID for this step
-        uses: softprops/action-gh-release@v2  # Use GitHub release action
-        with:
-          tag_name: "latest"  # Release tag name
-          name: "Docker Installer Latest LTS Stable Version ${{ env.version }}"  # Release name
-          body_path: release_notes.md  # Release notes file path
-          files: |  # List of included files
-            docker_install.sh
-            docker_desktop_installer_windows_x86_64.exe
-            docker_desktop_installer_mac_arm64.dmg
-            docker_desktop_installer_mac_x86_64.dmg
-            docker_desktop_installer_linux_debian_x86_64.deb
-            docker_desktop_installer_linux_fedora_x86_64.rpm
-            docker_desktop_installer_linux_ubuntu_x86_64.deb
-            docker_desktop_installer_linux_centos_x86_64.rpm
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # GitHub Token
+            echo "" >> "$release_note_file"
+            if [ "$lang_suffix" == "_zh" ]; then
+              echo "感谢您使用 Docker！如有任何问题，请参考官方文档或联系支持。" >> "$release_note_file"
+            else
+              echo "Thank you for using Docker! If you have any questions, please refer to the official documentation or contact support." >> "$release_note_file"
+            fi
+            
+            cat "$release_note_file"
+          }
 
-      - name: Output Release Notes  # Output release notes
-        run: cat release_notes.md  # Print release notes content
-        continue-on-error: true  # Ensure that the workflow does not terminate even if output fails
+          generate_release_notes ""  # 生成英文发布说明
+          generate_release_notes "_zh"  # 生成中文发布说明
+
+      - name: Create Release  # 创建发布
+        id: release  # 设置此步骤的 ID
+        uses: softprops/action-gh-release@v3.19.0  # 使用最新的 GitHub 发布动作
+        with:
+          tag_name: "latest"  # 发布标签名称
+          name: "Docker Installer Latest LTS Stable Version ${{ env.version }}"  # 发布名称
+          body_path: release_notes.md  # 发布说明文件路径
+          files: |
+            docker_install.sh
+            installers/docker_desktop_installer_windows_x86_64.exe
+            installers/docker_desktop_installer_mac_arm64.dmg
+            installers/docker_desktop_installer_mac_x86_64.dmg
+            installers/docker_desktop_installer_linux_debian_x86_64.deb
+            installers/docker_desktop_installer_linux_fedora_x86_64.rpm
+            installers/docker_desktop_installer_linux_ubuntu_x86_64.deb
+            installers/docker_desktop_installer_linux_centos_x86_64.rpm
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # GitHub 令牌
+
+      - name: Output Release Notes  # 输出发布说明
+        run: |
+          cat release_notes.md
+        continue-on-error: true  # 即使输出失败也不终止工作流
