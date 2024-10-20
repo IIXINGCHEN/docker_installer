@@ -77,16 +77,18 @@ jobs:
           )
 
           for key in "${!installers[@]}"; do
+            echo "Processing platform: $key"  # 调试信息
             url="${installers[$key]}"
             case "$key" in
               "linux_debian_x86_64") extension=".deb" ;;
               "linux_fedora_x86_64"|"linux_centos_x86_64") extension=".rpm" ;;
+              "linux_ubuntu_x86_64") extension=".deb" ;; # 确保此行存在
               "mac_arm64"|"mac_x86_64") extension=".dmg" ;;
               "windows_x86_64") extension=".exe" ;;
               *) echo "Unknown platform: $key"; exit 1 ;;
             esac
             file="$INSTALLERS_DIR/docker_desktop_installer_${key}${extension}"
-            echo "Downloading ${file} from${url}"
+            echo "Downloading $file from$url"
             curl -L -o "$file" "$url" || { echo "Failed to download $file"; exit 1; }
 
             if [ ! -s "$file" ]; then
