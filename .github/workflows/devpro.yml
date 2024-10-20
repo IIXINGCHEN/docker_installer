@@ -27,10 +27,15 @@ jobs:
         run: |
           mkdir -p $INSTALLERS_DIR
 
+      - name: Debug Environment Variables
+        run: |
+          echo "LATEST_VERSION: $LATEST_VERSION"
+          echo "INSTALLERS_DIR: $INSTALLERS_DIR"
+
       - name: Download Docker Desktop Installers
         env:
           LATEST_VERSION: ${{ env.LATEST_VERSION }}
-          INSTALLERS_DIR: $INSTALLERS_DIR
+          INSTALLERS_DIR: ${{ env.INSTALLERS_DIR }}
         run: |
           declare -A installers=(
             ["docker_install.sh"]="https://get.docker.com"
@@ -47,6 +52,10 @@ jobs:
             url="${installers[$filename]}"
             file_path="$INSTALLERS_DIR/$filename"
             echo "Downloading $filename from$url"
+
+            # 使用 mkdir 确保目录存在
+            mkdir -p "$(dirname "$file_path")"
+
             curl -L -o "$file_path" "$url" || { echo "Failed to download $filename"; exit 1; }
 
             if [ ! -s "$file_path" ]; then
@@ -55,118 +64,12 @@ jobs:
             fi
           done
 
-  prepare_release_notes:
-    name: Prepare Release Notes
-    runs-on: ubuntu-latest
-    needs: download_installers
-    steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
-
-      - name: Generate Release Notes
-        env:
-          INSTALLERS_DIR: $INSTALLERS_DIR
-          LATEST_VERSION: $LATEST_VERSION
+      - name: List Installers Directory
         run: |
-          release_file="release_notes.md"
+          ls -la $INSTALLERS_DIR
 
-          {
-            echo "# Docker Installer Latest LTS Stable Version"
-            echo "## Version: v${LATEST_VERSION}"
-            echo ""
-            echo "| File Name | File Size | Modified Date |"
-            echo "| --------- | --------- | ------------- |"
-
-            # 明确列出需要包含的文件
-            for filename in \
-              docker_desktop_installer_linux_centos_x86_64.rpm \
-              docker_desktop_installer_linux_debian_x86_64.deb \
-              docker_desktop_installer_linux_fedora_x86_64.rpm \
-              docker_desktop_installer_linux_ubuntu_x86_64.deb \
-              docker_desktop_installer_mac_arm64.dmg \
-              docker_desktop_installer_mac_x86_64.dmg \
-              docker_desktop_installer_windows_x86_64.exe \
-              docker_install.sh; do
-
-              file="$INSTALLERS_DIR/$filename"
-              if [ -f "$file" ]; then
-                size=$(du -h "$file" | awk '{print $1}')
-                # 获取文件的最后修改时间，格式为 YYYY-MM-DD HH:MM:SS
-                modified_date=$(date -r "$file" '+%Y-%m-%d %H:%M:%S')
-                echo "| $filename |$size | $modified_date |"
-              else
-                echo "| $filename | **Missing** | **Missing** |"
-              fi
-            done
-
-            echo ""
-            echo "Thank you for using Docker! If you have any questions, please refer to the [official documentation](https://docs.docker.com/) or contact support."
-            echo ""
-            echo "## Assets"
-
-            # 列出每个资产的信息
-            for filename in \
-              docker_desktop_installer_linux_centos_x86_64.rpm \
-              docker_desktop_installer_linux_debian_x86_64.deb \
-              docker_desktop_installer_linux_fedora_x86_64.rpm \
-              docker_desktop_installer_linux_ubuntu_x86_64.deb \
-              docker_desktop_installer_mac_arm64.dmg \
-              docker_desktop_installer_mac_x86_64.dmg \
-              docker_desktop_installer_windows_x86_64.exe \
-              docker_install.sh; do
-
-              file="$INSTALLERS_DIR/$filename"
-              if [ -f "$file" ]; then
-                size=$(du -h "$file" | awk '{print $1}')
-                echo "- **$filename** -$size"
-              fi
-            done
-
-            # 添加源代码链接
-            echo ""
-            echo "## Source Code"
-            echo "- [Download Source Code (zip)](https://github.com/your-username/your-repo/archive/refs/tags/v${LATEST_VERSION}.zip)"
-            echo "- [Download Source Code (tar.gz)](https://github.com/your-username/your-repo/archive/refs/tags/v${LATEST_VERSION}.tar.gz)"
-          } > "$release_file"
-
-          echo "Release notes generated: $release_file"
-
-      - name: Upload Release Notes as Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: release_notes
-          path: release_notes.md
+  prepare_release_notes:
+    # ... 其他作业步骤
 
   create_release:
-    name: Create GitHub Release
-    runs-on: ubuntu-latest
-    needs: prepare_release_notes
-    steps:
-      - name: Download Release Notes
-        uses: actions/download-artifact@v4
-        with:
-          name: release_notes
-          path: .
-
-      - name: Create GitHub Release
-        id: create_release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: "v${{ env.LATEST_VERSION }}"
-          name: "Docker Installer Latest LTS Stable Version v${{ env.LATEST_VERSION }}"
-          body_path: release_notes.md
-          files: |
-            ${{ env.INSTALLERS_DIR }}/docker_install.sh
-            ${{ env.INSTALLERS_DIR }}/docker_desktop_installer_windows_x86_64.exe
-            ${{ env.INSTALLERS_DIR }}/docker_desktop_installer_mac_arm64.dmg
-            ${{ env.INSTALLERS_DIR }}/docker_desktop_installer_mac_x86_64.dmg
-            ${{ env.INSTALLERS_DIR }}/docker_desktop_installer_linux_debian_x86_64.deb
-            ${{ env.INSTALLERS_DIR }}/docker_desktop_installer_linux_fedora_x86_64.rpm
-            ${{ env.INSTALLERS_DIR }}/docker_desktop_installer_linux_ubuntu_x86_64.deb
-            ${{ env.INSTALLERS_DIR }}/docker_desktop_installer_linux_centos_x86_64.rpm
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Output Release Notes
-        run: cat release_notes.md
-        continue-on-error: true
+    # ... 其他作业步骤
