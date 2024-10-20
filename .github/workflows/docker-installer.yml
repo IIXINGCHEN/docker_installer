@@ -20,7 +20,7 @@ jobs:
       - name: Set up environment  # 设置环境
         run: |
           sudo apt-get update -y  # 更新包列表
-          sudo apt-get install -y curl jq sha256sum  # 安装必需的软件包
+          sudo apt-get install -y curl jq  # 安装必需的软件包
 
       - name: Retrieve Latest Docker Version  # 获取最新 Docker 版本
         id: get_latest_version  # 设置此步骤的 ID
