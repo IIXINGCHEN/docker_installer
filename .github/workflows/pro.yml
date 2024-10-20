@@ -1,16 +1,16 @@
 name: Docker Installer Download
 
 on:
-  workflow_dispatch:  # 允许手动触发工作流
-  schedule:  # 定时触发工作流
-    - cron: '0 16 * * *'  # 每天 UTC 16:00 触发
+  workflow_dispatch:  # Allows manual triggering of the workflow
+  schedule:  # Schedule the workflow to run periodically
+    - cron: '0 16 * * *'  # Every day at UTC 16:00
 
 permissions:
-  contents: write  # 允许内容写入
-  packages: write  # 允许包写入
+  contents: write  # Allows reading and writing of repository contents
+  packages: write  # Allows publishing packages
 
 env:
-  INSTALLERS_DIR: installers  # 定义安装程序存储目录
+  INSTALLERS_DIR: installers  # Directory to store installers
 
 jobs:
   setup_environment:
@@ -49,8 +49,7 @@ jobs:
             echo "No stable Docker version found. Exiting."
             exit 1
           fi
-          echo "latest_version=$latest_version" >>$GITHUB_ENV
-          echo "::set-output name=version::$latest_version"
+          echo "version=$latest_version" >>$GITHUB_OUTPUT  # Set step output
 
   download_installers:
     name: Download Installers
@@ -77,12 +76,12 @@ jobs:
           )
 
           for key in "${!installers[@]}"; do
-            echo "Processing platform: $key"  # 调试信息
+            echo "Processing platform: $key"  # Debugging information
             url="${installers[$key]}"
             case "$key" in
               "linux_debian_x86_64") extension=".deb" ;;
               "linux_fedora_x86_64"|"linux_centos_x86_64") extension=".rpm" ;;
-              "linux_ubuntu_x86_64") extension=".deb" ;; # 确保此行存在
+              "linux_ubuntu_x86_64") extension=".deb" ;; 
               "mac_arm64"|"mac_x86_64") extension=".dmg" ;;
               "windows_x86_64") extension=".exe" ;;
               *) echo "Unknown platform: $key"; exit 1 ;;
@@ -147,7 +146,7 @@ jobs:
           done
 
       - name: Upload Release Notes as Artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4  # Updated to v4
         with:
           name: release_notes
           path: release_notes*.md
@@ -158,7 +157,7 @@ jobs:
     needs: prepare_release_notes
     steps:
       - name: Download Release Notes
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4  # Updated to v4
         with:
           name: release_notes
           path: .
