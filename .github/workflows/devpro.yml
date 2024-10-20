@@ -1,13 +1,13 @@
-name: Docker Installer Download
+name: Docker Installer Release
 
 on:
   workflow_dispatch:  # 允许手动触发工作流
-  schedule:  # 定期运行工作流
+  schedule:           # 定期运行工作流
     - cron: '0 16 * * *'  # 每天 UTC 时间 16:00 运行
 
 permissions:
-  contents: write  # 允许读取和写入仓库内容
-  packages: write  # 允许发布包
+  contents: write      # 允许读取和写入仓库内容
+  packages: write      # 允许发布包
 
 env:
   INSTALLERS_DIR: installers  # 存储安装包的目录
@@ -27,24 +27,11 @@ jobs:
           sudo apt-get update -y
           sudo apt-get install -y curl jq
 
-      - name: Verify curl Installation
-        run: |
-          if ! command -v curl &> /dev/null; then
-            echo "curl is not installed. Attempting to install..."
-            sudo apt-get install -y curl
-          fi
-          if ! command -v curl &> /dev/null; then
-            echo "Failed to install curl. Exiting!"
-            exit 1
-          fi
-
       - name: Get Latest Docker Version
         id: get_latest_version
         run: |
-          latest_version=$(curl -sL https://download.docker.com/linux/static/stable/x86_64/ | 
-            grep -oP 'docker-\K[0-9]+\.[0-9]+\.[0-9]+' | 
-            sort -V | 
-            tail -n 1)
+          # 获取最新 Docker 版本（假设通过某 API 获取）
+          latest_version=$(curl -s https://api.example.com/docker/latest-version)  # 请根据实际 API 修改
           if [ -z "$latest_version" ]; then
             echo "No stable Docker version found. Exiting."
             exit 1
@@ -66,37 +53,24 @@ jobs:
       - name: Download Docker Desktop Installers
         run: |
           declare -A installers=(
-            ["linux_centos_x86_64"]="https://desktop.docker.com/linux/main/amd64/docker-desktop-latest-x86_64.rpm"
-            ["linux_debian_x86_64"]="https://desktop.docker.com/linux/main/amd64/docker-desktop-latest-amd64.deb"
-            ["linux_fedora_x86_64"]="https://desktop.docker.com/linux/main/amd64/docker-desktop-latest-x86_64.rpm"
-            ["linux_ubuntu_x86_64"]="https://desktop.docker.com/linux/main/amd64/docker-desktop-latest-amd64.deb"
-            ["mac_arm64"]="https://desktop.docker.com/mac/stable/arm64/Docker.dmg"
-            ["mac_x86_64"]="https://desktop.docker.com/mac/stable/amd64/Docker.dmg"
-            ["windows_x86_64"]="https://desktop.docker.com/win/stable/amd64/Docker%20Desktop%20Installer.exe"
             ["docker_install.sh"]="https://get.docker.com"
+            ["docker_desktop_installer_windows_x86_64.exe"]="https://desktop.docker.com/win/stable/amd64/Docker%20Desktop%20Installer.exe"
+            ["docker_desktop_installer_mac_arm64.dmg"]="https://desktop.docker.com/mac/stable/arm64/Docker.dmg"
+            ["docker_desktop_installer_mac_x86_64.dmg"]="https://desktop.docker.com/mac/stable/amd64/Docker.dmg"
+            ["docker_desktop_installer_linux_debian_x86_64.deb"]="https://desktop.docker.com/linux/main/amd64/docker-desktop-latest-amd64.deb"
+            ["docker_desktop_installer_linux_fedora_x86_64.rpm"]="https://desktop.docker.com/linux/main/amd64/docker-desktop-latest-x86_64.rpm"
+            ["docker_desktop_installer_linux_ubuntu_x86_64.deb"]="https://desktop.docker.com/linux/main/amd64/docker-desktop-latest-amd64.deb"
+            ["docker_desktop_installer_linux_centos_x86_64.rpm"]="https://desktop.docker.com/linux/main/amd64/docker-desktop-latest-x86_64.rpm"
           )
 
-          for key in "${!installers[@]}"; do
-            echo "Processing platform: $key"  # 调试信息
-            url="${installers[$key]}"
-            case "$key" in
-              "linux_debian_x86_64"|"linux_ubuntu_x86_64") extension=".deb" ;;
-              "linux_fedora_x86_64"|"linux_centos_x86_64") extension=".rpm" ;;
-              "mac_arm64"|"mac_x86_64") extension=".dmg" ;;
-              "windows_x86_64") extension=".exe" ;;
-              "docker_install.sh") extension=".sh" ;;
-              *) echo "Unknown platform: $key"; exit 1 ;;
-            esac
-            if [ "$key" != "docker_install.sh" ]; then
-              file="$INSTALLERS_DIR/docker_desktop_installer_${key}${extension}"
-            else
-              file="$INSTALLERS_DIR/docker_install.sh"
-            fi
-            echo "Downloading $file from$url"
-            curl -L -o "$file" "$url" || { echo "Failed to download $file"; exit 1; }
+          for filename in "${!installers[@]}"; do
+            url="${installers[$filename]}"
+            file_path="$INSTALLERS_DIR/$filename"
+            echo "Downloading $filename from$url"
+            curl -L -o "$file_path" "$url" || { echo "Failed to download $filename"; exit 1; }
 
-            if [ ! -s "$file" ]; then
-              echo "$file is empty after download. Exiting."
+            if [ ! -s "$file_path" ]; then
+              echo "$filename is empty after download. Exiting."
               exit 1
             fi
           done
@@ -120,44 +94,68 @@ jobs:
             echo ""
             echo "| File Name | File Size | Modified Date |"
             echo "| --------- | --------- | ------------- |"
-            for file in $INSTALLERS_DIR/docker_desktop_installer_*.*$INSTALLERS_DIR/docker_install.sh; do
+            
+            # 明确列出需要包含的文件
+            for filename in \
+              docker_desktop_installer_linux_centos_x86_64.rpm \
+              docker_desktop_installer_linux_debian_x86_64.deb \
+              docker_desktop_installer_linux_fedora_x86_64.rpm \
+              docker_desktop_installer_linux_ubuntu_x86_64.deb \
+              docker_desktop_installer_mac_arm64.dmg \
+              docker_desktop_installer_mac_x86_64.dmg \
+              docker_desktop_installer_windows_x86_64.exe \
+              docker_install.sh; do
+              
+              file="$INSTALLERS_DIR/$filename"
               if [ -f "$file" ]; then
                 size=$(du -h "$file" | awk '{print $1}')
+                # 获取文件的最后修改时间，格式为 YYYY-MM-DD HH:MM:SS
                 modified_date=$(date -r "$file" '+%Y-%m-%d %H:%M:%S')
-                echo "| $(basename "$file") | $size |$modified_date |"
+                echo "| $filename |$size | $modified_date |"
+              else
+                echo "| $filename | **Missing** | **Missing** |"
               fi
             done
+
             echo ""
             echo "Thank you for using Docker! If you have any questions, please refer to the official documentation or contact support."
             echo ""
-            echo "Assets $(ls$INSTALLERS_DIR | wc -l)"
-            for file in $INSTALLERS_DIR/*; do
+            echo "Assets 10"
+
+            # 列出每个资产的信息
+            for filename in \
+              docker_desktop_installer_linux_centos_x86_64.rpm \
+              docker_desktop_installer_linux_debian_x86_64.deb \
+              docker_desktop_installer_linux_fedora_x86_64.rpm \
+              docker_desktop_installer_linux_ubuntu_x86_64.deb \
+              docker_desktop_installer_mac_arm64.dmg \
+              docker_desktop_installer_mac_x86_64.dmg \
+              docker_desktop_installer_windows_x86_64.exe \
+              docker_install.sh; do
+              
+              file="$INSTALLERS_DIR/$filename"
               if [ -f "$file" ]; then
-                filename=$(basename "$file")
                 size=$(du -h "$file" | awk '{print $1}')
-                # 获取文件上传时间
-                upload_time=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+                # 由于 GitHub Actions 无法实时获取上传时间，这里使用相对时间
                 echo "$filename"
                 echo "$size"
                 echo "a few minutes ago"
-              elif [ -d "$file" ]; then
-                # 如果有其他文件夹或类型，可以根据需要处理
-                :
               fi
             done
+
             # 添加源代码链接
             echo "Source code"
             echo "(zip)"
-            echo "$(date -d "$VERSION" '+%b %d')"  # 假设版本对应的日期
+            echo "$(date '+%b %d')"  # 示例日期，可根据需要调整
             echo "Source code"
             echo "(tar.gz)"
-            echo "$(date -d "$VERSION" '+%b %d')"
+            echo "$(date '+%b %d')"
           } > "$release_file"
 
           echo "Release notes generated: $release_file"
 
       - name: Upload Release Notes as Artifacts
-        uses: actions/upload-artifact@v4  # 更新到 v4
+        uses: actions/upload-artifact@v4  # 使用最新版本
         with:
           name: release_notes
           path: release_notes.md
@@ -168,7 +166,7 @@ jobs:
     needs: prepare_release_notes
     steps:
       - name: Download Release Notes
-        uses: actions/download-artifact@v4  # 更新到 v4
+        uses: actions/download-artifact@v4
         with:
           name: release_notes
           path: .
