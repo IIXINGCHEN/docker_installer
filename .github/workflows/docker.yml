@@ -50,18 +50,31 @@ jobs:
           max_attempts=$MAX_RETRIES
           
           while [ $attempt -le $max_attempts ]; do
-            echo "尝试获取 Docker 版本 (attempt $attempt/$max_attempts)"
+            echo "尝试获取 Docker 最新稳定 LTS 版本 (attempt $attempt/$max_attempts)"
             
-            latest_version=$(curl -sL --retry 3 --retry-delay 5 https://download.docker.com/linux/static/stable/x86_64/ | 
-              grep -oP 'docker-\K[0-9]+\.[0-9]+\.[0-9]+' | 
-              sort -V | 
-              tail -n 1)
+            # 从 Docker Hub API 获取最新的 LTS 版本
+            latest_version=$(curl -sL --retry 3 --retry-delay 5 "https://registry.hub.docker.com/v2/repositories/library/docker/tags?page_size=100" | \
+              jq -r '.results[].name' | \
+              grep -E '^[0-9]+\.[0-9]+\.[0-9]+-lts$' | \
+              sort -V | \
+              tail -n 1 | \
+              sed 's/-lts$//')
             
             if [ -n "$latest_version" ]; then
-              echo "version=$latest_version" >>$GITHUB_ENV
-              echo "DOCKER_VERSION=$latest_version" >>$GITHUB_OUTPUT
-              echo "成功获取最新 Docker 版本: $latest_version"
-              break
+              # 如果没有找到 LTS 版本，尝试获取最新的稳定版本
+              if [ -z "$latest_version" ]; then
+                latest_version=$(curl -sL --retry 3 --retry-delay 5 "https://download.docker.com/linux/static/stable/x86_64/" | \
+                  grep -oP 'docker-\K[0-9]+\.[0-9]+\.[0-9]+(?=\.tgz)' | \
+                  sort -V | \
+                  tail -n 1)
+              fi
+              
+              if [ -n "$latest_version" ]; then
+                echo "version=$latest_version" >>$GITHUB_ENV
+                echo "DOCKER_VERSION=$latest_version" >>$GITHUB_OUTPUT
+                echo "成功获取最新 Docker 版本: $latest_version"
+                break
+              fi
             fi
             
             attempt=$((attempt + 1))
@@ -75,6 +88,14 @@ jobs:
             echo "错误：无法获取 Docker 版本"
             exit 1
           fi
+          
+          # 验证版本格式
+          if ! [[ $latest_version =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "错误：无效的版本格式: $latest_version"
+            exit 1
+          fi
+          
+          echo "::notice::获取到的 Docker 版本: $latest_version"
 
       - name: Validate Version Format
         run: |
@@ -93,16 +114,17 @@ jobs:
             docker-installers-${{ env.version }}-
             docker-installers-
 
-      - name: Define Common Functions
+      - name: Download All Files
         run: |
           # 定义下载函数
           download_with_retry() {
             local url="$1"
             local output="$2"
             local attempts=1
+            local max_attempts=$MAX_RETRIES
             
-            while [ $attempts -le $MAX_RETRIES ]; do
-              echo "下载 $output (尝试 $attempts/$MAX_RETRIES)"
+            while [ $attempts -le $max_attempts ]; do
+              echo "下载 $output (尝试 $attempts/$max_attempts)"
               if curl -L --retry 3 --retry-delay 5 -o "$output" "$url"; then
                 if [ -s "$output" ]; then
                   echo "✓ 成功下载: $output"
@@ -111,7 +133,7 @@ jobs:
               fi
               
               attempts=$((attempts + 1))
-              if [ $attempts -le $MAX_RETRIES ]; then
+              if [ $attempts -le $max_attempts ]; then
                 echo "等待 $RETRY_DELAY 秒后重试..."
                 sleep $RETRY_DELAY
               fi
@@ -120,11 +142,8 @@ jobs:
             echo "× 下载失败: $output"
             return 1
           }
-          # 导出函数使其对后续步骤可用
-          export -f download_with_retry
 
-      - name: Download Docker Installers
-        run: |
+          # 创建安装包目录
           INSTALLER_DIR="installers"
           mkdir -p "$INSTALLER_DIR"
           
@@ -158,14 +177,8 @@ jobs:
               continue
             fi
           done
-          
-          if [ $failed_downloads -gt 0 ]; then
-            echo "::warning::$failed_downloads 个文件下载失败"
-            exit 1
-          fi
 
-      - name: Download and Verify Docker Installation Script
-        run: |
+          # 下载 Docker 安装脚本
           SCRIPT_URL="https://get.docker.com"
           SCRIPT_FILE="docker_install.sh"
           
@@ -189,6 +202,11 @@ jobs:
           fi
           
           echo "✓ Docker 安装脚本验证成功"
+          
+          if [ $failed_downloads -gt 0 ]; then
+            echo "::warning::$failed_downloads 个文件下载失败"
+            exit 1
+          fi
 
       - name: Generate Release Notes
         run: |
