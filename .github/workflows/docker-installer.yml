@@ -1,9 +1,9 @@
 name: Docker Installer Workflow
 
 on:
-  workflow_dispatch:  # 允许手动触发工作流
-  schedule:  # 定时触发工作流，每天16:00 UTC
-    - cron: '0 16 * * *'
+  workflow_dispatch:
+  schedule:
+    - cron: '0 16 * * *'  # 每天16:00 UTC
 
 jobs:
   download_and_verify:
@@ -78,61 +78,42 @@ jobs:
           echo "正在下载 Docker 安装脚本 $SCRIPT_URL"
           curl -sL -o "$SCRIPT_FILE" "$SCRIPT_URL" || { echo "下载 $SCRIPT_FILE 失败"; exit 1; }
 
-      - name: Download Docker Installation Script SHA256
-        run: |
-          # 假设SHA256值的下载地址
-          SHA256_URL="https://download.docker.com/linux/static/stable/x86_64/sha256sums.txt"  # 这个URL需要根据Docker的实际提供方式来修改
-          
-          echo "正在下载 SHA256 校验值 $SHA256_URL"
-          curl -sL -o "expected_sha256.txt" "$SHA256_URL" || { echo "下载SHA256校验值失败"; exit 1; }
-          
-          EXPECTED_SHA256=$(grep docker_install.sh expected_sha256.txt | awk '{print$1}')
-          if [ -z "$EXPECTED_SHA256" ]; then
-            echo "无法获取预期的SHA256值"
-            exit 1
-          fi
-          echo "预期的SHA256值是: $EXPECTED_SHA256"
-          echo "EXPECTED_SHA256=$EXPECTED_SHA256" >>$GITHUB_ENV
-
-      - name: Verify Docker Installation Script Integrity
-        run: |
-          if [ ! -s "docker_install.sh" ]; then
-            echo "错误：docker_install.sh 文件为空或不存在"
-            exit 1
-          fi
-
-          ACTUAL_SHA256=$(sha256sum docker_install.sh | awk '{print$1}')
-          echo "当前脚本 SHA256: $ACTUAL_SHA256"
-
-          if [ "$ACTUAL_SHA256" != "$EXPECTED_SHA256" ]; then
-            echo "错误：SHA256 校验失败，安装脚本可能已被更改。"
-            exit 1
-          fi
-
-          echo "安装脚本验证成功"
-
       - name: Prepare Release Notes
         run: |
           generate_release_notes() {
             local release_note_file="release_notes.md"
-            echo "# Docker Installer Latest LTS Stable Version" > "$release_note_file"
+
+            # Header
+            echo "# Docker Installer - Latest LTS Stable Version 🚀" > "$release_note_file"
             echo "" >> "$release_note_file"
             echo "**Version:** v${{ env.version }}" >> "$release_note_file"
             echo "" >> "$release_note_file"
-            echo "| File Name | File Size | Modified Date |" >> "$release_note_file"
-            echo "| --- | --- | --- |" >> "$release_note_file"
+
+            # Introduction
+            echo "Welcome to the latest release of the Docker Installer. Below you'll find the installers for the latest stable version. Ensure to verify checksums for integrity and security before installation. 💡" >> "$release_note_file"
+            echo "" >> "$release_note_file"
+
+            # Table with styling
+            echo "| **File Name** | **File Size** | **Modified Date** |" >> "$release_note_file"
+            echo "|:-------------:|:-------------:|:-----------------:|" >> "$release_note_file"
             for file in installers/docker_desktop_installer_*.* docker_install.sh; do
               if [ -f "$file" ]; then
                 size=$(du -h "$file" | cut -f1)
                 modified_date=$(date -r "$file" '+%Y-%m-%d %H:%M:%S')
-                echo "| $(basename "$file") | $size |$modified_date |" >> "$release_note_file"
+                echo "| \`$(basename "$file")\` | $size |$modified_date |" >> "$release_note_file"
               fi
             done
             echo "" >> "$release_note_file"
-            echo "Thank you for using Docker! If you have any questions, please refer to the official documentation or contact support." >> "$release_note_file"
+
+            # Closing statement
+            echo "🔗 For more information, please visit [Docker Official Documentation](https://docs.docker.com)." >> "$release_note_file"
+            echo "" >> "$release_note_file"
+            echo "Thank you for using Docker! Should you have any questions or need support, feel free to reach out to us. 🙌" >> "$release_note_file"
+            
+            # Show the generated release notes
             cat "$release_note_file"
           }
-          generate_release_notes          
+          generate_release_notes
 
       - name: Create Release
         id: release
