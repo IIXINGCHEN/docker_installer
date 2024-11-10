@@ -3,7 +3,7 @@ name: Docker Installer Download
 on:
   workflow_dispatch:  # 手动触发
   schedule:
-    - cron: '0 */6 * * *'  # 每6小时运行一次，增加更新频率
+    - cron: '0 */6 * *'  # 每6小时运行一次，增加更新频率
   push:
     tags:
       - 'v*'  # 当推送版本标签时触发
@@ -52,28 +52,40 @@ jobs:
           while [ $attempt -le $max_attempts ]; do
             echo "尝试获取 Docker 最新稳定 LTS 版本 (attempt $attempt/$max_attempts)"
             
-            # 从 Docker Hub API 获取最新的 LTS 版本
-            latest_version=$(curl -sL --retry 3 --retry-delay 5 "https://registry.hub.docker.com/v2/repositories/library/docker/tags?page_size=100" | \
-              jq -r '.results[].name' | \
-              grep -E '^[0-9]+\.[0-9]+\.[0-9]+-lts$' | \
-              sort -V | \
-              tail -n 1 | \
-              sed 's/-lts$//')
+            # 从 Docker 官方 API 获取最新版本
+            latest_version=$(curl -sL --retry 3 --retry-delay 5 \
+              -H "Accept: application/json" \
+              "https://api.docker.com/v1.41/version" | \
+              jq -r '.Version' || \
+              curl -sL --retry 3 --retry-delay 5 \
+              "https://docs.docker.com/engine/release-notes/" | \
+              grep -oP 'Docker Engine \K[0-9]+\.[0-9]+\.[0-9]+' | \
+              head -n 1)
+            
+            if [ -z "$latest_version" ]; then
+              # 备用方法：从下载页面获取版本
+              latest_version=$(curl -sL --retry 3 --retry-delay 5 \
+                "https://download.docker.com/linux/static/stable/x86_64/" | \
+                grep -oP 'docker-\K[0-9]+\.[0-9]+\.[0-9]+(?=\.tgz)' | \
+                sort -rV | \
+                head -n 1)
+            fi
             
             if [ -n "$latest_version" ]; then
-              # 如果没有找到 LTS 版本，尝试获取最新的稳定版本
-              if [ -z "$latest_version" ]; then
-                latest_version=$(curl -sL --retry 3 --retry-delay 5 "https://download.docker.com/linux/static/stable/x86_64/" | \
-                  grep -oP 'docker-\K[0-9]+\.[0-9]+\.[0-9]+(?=\.tgz)' | \
-                  sort -V | \
-                  tail -n 1)
-              fi
+              # 移除可能的前缀
+              latest_version=$(echo "$latest_version" | grep -oP '[0-9]+\.[0-9]+\.[0-9]+')
               
-              if [ -n "$latest_version" ]; then
-                echo "version=$latest_version" >>$GITHUB_ENV
-                echo "DOCKER_VERSION=$latest_version" >>$GITHUB_OUTPUT
-                echo "成功获取最新 Docker 版本: $latest_version"
+              echo "version=$latest_version" >>$GITHUB_ENV
+              echo "DOCKER_VERSION=$latest_version" >>$GITHUB_OUTPUT
+              echo "成功获取最新 Docker 版本: $latest_version"
+              
+              # 验证版本格式
+              if [[ $latest_version =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+                echo "::notice::获取到的 Docker 版本: $latest_version"
                 break
+              else
+                echo "警告：版本格式不正确，继续尝试"
+                latest_version=""
               fi
             fi
             
@@ -88,14 +100,6 @@ jobs:
             echo "错误：无法获取 Docker 版本"
             exit 1
           fi
-          
-          # 验证版本格式
-          if ! [[ $latest_version =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            echo "错误：无效的版本格式: $latest_version"
-            exit 1
-          fi
-          
-          echo "::notice::获取到的 Docker 版本: $latest_version"
 
       - name: Validate Version Format
         run: |
