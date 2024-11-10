@@ -93,11 +93,8 @@ jobs:
             docker-installers-${{ env.version }}-
             docker-installers-
 
-      - name: Download Docker Installers
+      - name: Define Common Functions
         run: |
-          INSTALLER_DIR="installers"
-          mkdir -p "$INSTALLER_DIR"
-          
           # 定义下载函数
           download_with_retry() {
             local url="$1"
@@ -123,6 +120,13 @@ jobs:
             echo "× 下载失败: $output"
             return 1
           }
+          # 导出函数使其对后续步骤可用
+          export -f download_with_retry
+
+      - name: Download Docker Installers
+        run: |
+          INSTALLER_DIR="installers"
+          mkdir -p "$INSTALLER_DIR"
           
           # 定义安装包映射
           declare -A installers=(
@@ -247,7 +251,7 @@ jobs:
 
       - name: Upload Logs
         if: always()
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: workflow-logs
           path: logs/
