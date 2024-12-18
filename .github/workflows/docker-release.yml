@@ -106,6 +106,17 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
         
+      - name: 安装基础工具
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ca-certificates gnupg lsb-release
+          sudo apt-get install -y --no-install-recommends curl
+          
+      - name: 验证工具安装
+        run: |
+          which curl
+          curl --version
+
       - name: Setup environment
         run: |
           # 更新到最新的软件包
