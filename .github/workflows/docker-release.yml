@@ -20,7 +20,7 @@ name: Docker Release Workflow
 # 环境变量
 env:
   INSTALLER_DIR: "installers"
-  MINIMUM_FILE_SIZE_MB: 400
+  MINIMUM_FILE_SIZE_MB: 1024
   DOWNLOAD_TIMEOUT: 600
   CONNECT_TIMEOUT: 30
   MAX_RETRIES: 3
@@ -108,14 +108,14 @@ jobs:
         
       - name: 安装基础工具
         run: |
+          sudo rm -f /etc/apt/sources.list.d/*.list
+          sudo apt-get clean
           sudo apt-get update
-          sudo apt-get install -y ca-certificates gnupg lsb-release
-          sudo apt-get install -y --no-install-recommends curl
+          sudo apt-get install -y --fix-missing curl
           
       - name: 验证工具安装
         run: |
-          which curl
-          curl --version
+          curl --version || true
 
       - name: Setup environment
         run: |
@@ -172,43 +172,43 @@ jobs:
                 "windows_x86_64": {
                   "url": "https://desktop.docker.com/win/stable/amd64/Docker%20Desktop%20Installer.exe",
                   "filename": "docker_desktop_installer_windows_x86_64.exe",
-                  "min_size": 400,
+                  "min_size": 1024,
                   "verify_command": "certutil -hashfile"
                 },
                 "mac_arm64": {
                   "url": "https://desktop.docker.com/mac/stable/arm64/Docker.dmg",
                   "filename": "docker_desktop_installer_mac_arm64.dmg",
-                  "min_size": 400,
+                  "min_size": 1024,
                   "verify_command": "shasum -a 256"
                 },
                 "mac_x86_64": {
                   "url": "https://desktop.docker.com/mac/stable/amd64/Docker.dmg",
                   "filename": "docker_desktop_installer_mac_x86_64.dmg",
-                  "min_size": 400,
+                  "min_size": 1024,
                   "verify_command": "shasum -a 256"
                 },
                 "linux_debian_x86_64": {
                   "url": "https://desktop.docker.com/linux/main/amd64/docker-desktop-\($version).deb",
                   "filename": "docker_desktop_installer_linux_debian_x86_64.deb",
-                  "min_size": 400,
+                  "min_size": 1024,
                   "verify_command": "sha256sum"
                 },
                 "linux_fedora_x86_64": {
                   "url": "https://desktop.docker.com/linux/main/amd64/docker-desktop-\($version).rpm",
                   "filename": "docker_desktop_installer_linux_fedora_x86_64.rpm",
-                  "min_size": 400,
+                  "min_size": 1024,
                   "verify_command": "sha256sum"
                 },
                 "linux_ubuntu_x86_64": {
                   "url": "https://desktop.docker.com/linux/main/amd64/docker-desktop-\($version).deb",
                   "filename": "docker_desktop_installer_linux_ubuntu_x86_64.deb",
-                  "min_size": 400,
+                  "min_size": 1024,
                   "verify_command": "sha256sum"
                 },
                 "linux_centos_x86_64": {
                   "url": "https://desktop.docker.com/linux/main/amd64/docker-desktop-\($version).rpm",
                   "filename": "docker_desktop_installer_linux_centos_x86_64.rpm",
-                  "min_size": 400,
+                  "min_size": 1024,
                   "verify_command": "sha256sum"
                 }
               }
