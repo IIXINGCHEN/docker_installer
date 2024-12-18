@@ -487,3 +487,13 @@ jobs:
               "timestamp": "$(date -u '+%Y-%m-%dT%H:%M:%SZ')",
               "environment": "${{ github.event.inputs.environment || 'scheduled' }}"
             }
+
+      - name: 更新系统包
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y curl wget
+          
+      - name: 检查工具版本
+        run: |
+          curl --version
+          wget --version
