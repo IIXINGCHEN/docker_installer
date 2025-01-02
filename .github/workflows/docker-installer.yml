@@ -1,22 +1,22 @@
 name: Docker 安装程序工作流
 
 on:
-  workflow_dispatch:
+  workflow_dispatch:  # 支持手动触发
   schedule:
-    - cron: '0 16 * * *'  # 每天16:00 UTC
+    - cron: '0 16 * * *'  # 每天16:00 UTC（北京时间0点）
 
 jobs:
   download_and_verify:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-latest  # 使用最新版本的 Ubuntu 环境
 
     steps:
       - name: 检出仓库
-        uses: actions/checkout@v4
+        uses: actions/checkout@v4  # 检出代码仓库
 
       - name: 设置环境
         run: |
-          sudo apt-get update -y
-          sudo apt-get install -y curl jq
+          sudo apt-get update -y  # 更新包列表
+          sudo apt-get install -y curl jq  # 安装 curl 和 jq
 
       - name: 获取最新 Docker LTS 版本
         id: get_latest_version
@@ -28,20 +28,20 @@ jobs:
             exit 1
           fi
           echo "最新稳定的 Docker LTS 版本: $latest_version"
-          echo "version=$latest_version" >>$GITHUB_ENV
+          echo "version=$latest_version" >>$GITHUB_ENV  # 将版本号存储到环境变量中
 
       - name: 恢复安装程序缓存
-        uses: actions/cache@v3
+        uses: actions/cache@v3  # 使用缓存机制
         with:
-          path: installers/
-          key: docker-installers-${{ env.version }}
+          path: installers/  # 缓存路径
+          key: docker-installers-${{ env.version }}  # 缓存键
           restore-keys: |
-            docker-installers-
+            docker-installers-  # 恢复缓存的备用键
 
       - name: 下载 Docker 安装程序
         run: |
           INSTALLER_DIR="installers"
-          mkdir -p "$INSTALLER_DIR"
+          mkdir -p "$INSTALLER_DIR"  # 创建安装程序目录
           declare -A installers=(
             ["windows_x86_64"]="https://desktop.docker.com/win/stable/amd64/Docker%20Desktop%20Installer.exe"
             ["mac_arm64"]="https://desktop.docker.com/mac/stable/arm64/Docker.dmg"
@@ -53,15 +53,15 @@ jobs:
           )
           for key in "${!installers[@]}"; do
             url="${installers[$key]}"
-            extension="${url##*.}"
-            file_name="docker_desktop_installer_${key}.${extension}"
+            extension="${url##*.}"  # 获取文件扩展名
+            file_name="docker_desktop_installer_${key}.${extension}"  # 生成文件名
             file_path="$INSTALLER_DIR/$file_name"
             if [ -f "$file_path" ]; then
               echo "$file_name 已存在于缓存中，跳过下载。"
               continue
             fi
             echo "正在从 $url 下载$file_name"
-            curl -L -o "$file_path" "$url" || { echo "下载 $file_name 失败"; exit 1; }
+            curl -L -o "$file_path" "$url" || { echo "下载 $file_name 失败"; exit 1; }  # 下载文件
             if [ ! -s "$file_path" ]; then
               echo "$file_name 下载失败或文件为空"
               exit 1
@@ -69,7 +69,7 @@ jobs:
           done
 
       - name: 保存安装程序缓存
-        uses: actions/cache@v3
+        uses: actions/cache@v3  # 保存缓存
         with:
           path: installers/
           key: docker-installers-${{ env.version }}
@@ -115,8 +115,8 @@ jobs:
             echo "|:-------------:|:-------------:|:-----------------:|" >> "$release_note_file"
             for file in installers/docker_desktop_installer_*.* docker_install.sh; do
               if [ -f "$file" ]; then
-                size=$(du -h "$file" | cut -f1)
-                modified_date=$(date -r "$file" '+%Y-%m-%d %H:%M:%S')
+                size=$(du -h "$file" | cut -f1)  # 获取文件大小
+                modified_date=$(date -r "$file" '+%Y-%m-%d %H:%M:%S')  # 获取修改日期
                 echo "| \`$(basename "$file")\` | $size |$modified_date |" >> "$release_note_file"
               fi
             done
@@ -140,7 +140,7 @@ jobs:
 
       - name: 删除现有发布（如果存在）
         id: delete_release
-        uses: actions/github-script@v6
+        uses: actions/github-script@v6  # 使用 GitHub Script 删除现有发布
         with:
           script: |
             const { data: releases } = await github.rest.repos.listReleases({
@@ -161,12 +161,12 @@ jobs:
 
       - name: 创建发布
         id: release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v2  # 创建 GitHub 发布
         with:
-          tag_name: "latest"
-          name: "Docker 安装程序 最新 LTS 稳定版本 ${{ env.version }}"
-          body_path: release_notes.md
-          files: |
+          tag_name: "latest"  # 发布标签
+          name: "Docker 安装程序 最新 LTS 稳定版本 ${{ env.version }}"  # 发布名称
+          body_path: release_notes.md  # 发布说明文件
+          files: |  # 包含的文件
             docker_install.sh
             installers/docker_desktop_installer_windows_x86_64.exe
             installers/docker_desktop_installer_mac_arm64.dmg
@@ -176,9 +176,9 @@ jobs:
             installers/docker_desktop_installer_linux_ubuntu_x86_64.deb
             installers/docker_desktop_installer_linux_centos_x86_64.rpm
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # 使用 GitHub Token 授权
 
       - name: 输出发布说明
         run: |
-          cat release_notes.md
-        continue-on-error: true
+          cat release_notes.md  # 输出发布说明
+        continue-on-error: true  # 即使失败也继续执行
