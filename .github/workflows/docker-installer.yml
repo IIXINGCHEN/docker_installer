@@ -1,5 +1,4 @@
-
-name: Docker Installer Workflow
+name: Docker 安装程序工作流
 
 on:
   workflow_dispatch:
@@ -11,27 +10,27 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repository
+      - name: 检出仓库
         uses: actions/checkout@v4
 
-      - name: Set up environment
+      - name: 设置环境
         run: |
           sudo apt-get update -y
           sudo apt-get install -y curl jq
 
-      - name: Retrieve Latest Docker LTS Version
+      - name: 获取最新 Docker LTS 版本
         id: get_latest_version
         run: |
-          # Fetch the latest LTS version from Docker's API
-          latest_version=$(curl -s https://api.github.com/repos/docker/docker-ce/releases/latest | jq -r '.tag_name' | sed 's/v//')
+          # 从 Docker 的静态稳定页面获取最新 LTS 版本
+          latest_version=$(curl -s https://download.docker.com/linux/static/stable/x86_64/ | grep -oP 'docker-\K[0-9]+\.[0-9]+\.[0-9]+' | sort -V | tail -n 1)
           if [ -z "$latest_version" ]; then
-            echo "No stable Docker LTS version found, exiting."
+            echo "未找到稳定的 Docker LTS 版本，退出。"
             exit 1
           fi
-          echo "Latest stable Docker LTS version: $latest_version"
+          echo "最新稳定的 Docker LTS 版本: $latest_version"
           echo "version=$latest_version" >>$GITHUB_ENV
 
-      - name: Restore Installers Cache
+      - name: 恢复安装程序缓存
         uses: actions/cache@v3
         with:
           path: installers/
@@ -39,7 +38,7 @@ jobs:
           restore-keys: |
             docker-installers-
 
-      - name: Download Docker Installers
+      - name: 下载 Docker 安装程序
         run: |
           INSTALLER_DIR="installers"
           mkdir -p "$INSTALLER_DIR"
@@ -69,36 +68,50 @@ jobs:
             fi
           done
 
-      - name: Save Installers Cache
+      - name: 保存安装程序缓存
         uses: actions/cache@v3
         with:
           path: installers/
           key: docker-installers-${{ env.version }}
 
-      - name: Download Docker Installation Script
+      - name: 下载 Docker 安装脚本
         run: |
           SCRIPT_URL="https://get.docker.com"
           SCRIPT_FILE="docker_install.sh"
           echo "正在下载 Docker 安装脚本 $SCRIPT_URL"
           curl -sL -o "$SCRIPT_FILE" "$SCRIPT_URL" || { echo "下载 $SCRIPT_FILE 失败"; exit 1; }
 
-      - name: Prepare Release Notes
+      - name: 获取 Docker 更新日志
+        id: fetch_changelog
+        run: |
+          # 从 Docker 的 GitHub 发布页面获取更新日志
+          changelog_url="https://api.github.com/repos/docker/docker-ce/releases/tags/v${{ env.version }}"
+          changelog=$(curl -s "$changelog_url" | jq -r '.body')
+          if [ -z "$changelog" ]; then
+            echo "未找到版本 ${{ env.version }} 的更新日志。"
+            echo "changelog=此版本无更新日志。" >>$GITHUB_ENV
+          else
+            echo "更新日志获取成功。"
+            echo "changelog=$changelog" >>$GITHUB_ENV
+          fi
+
+      - name: 准备发布说明
         run: |
           generate_release_notes() {
             local release_note_file="release_notes.md"
 
-            # Header
-            echo "# Docker Installer - Latest LTS Stable Version 🚀" > "$release_note_file"
+            # 标题
+            echo "# Docker 安装程序 - 最新 LTS 稳定版本 🚀" > "$release_note_file"
             echo "" >> "$release_note_file"
-            echo "**Version:** v${{ env.version }}" >> "$release_note_file"
-            echo "" >> "$release_note_file"
-
-            # Introduction
-            echo "Welcome to the latest release of the Docker Installer. Below you'll find the installers for the latest stable LTS version. Ensure to verify checksums for integrity and security before installation. 💡" >> "$release_note_file"
+            echo "**版本:** v${{ env.version }}" >> "$release_note_file"
             echo "" >> "$release_note_file"
 
-            # Table with styling
-            echo "| **File Name** | **File Size** | **Modified Date** |" >> "$release_note_file"
+            # 介绍
+            echo "欢迎使用最新版本的 Docker 安装程序。以下是适用于最新稳定 LTS 版本的安装程序。请在安装前验证校验和以确保完整性和安全性。💡" >> "$release_note_file"
+            echo "" >> "$release_note_file"
+
+            # 表格
+            echo "| **文件名称** | **文件大小** | **修改日期** |" >> "$release_note_file"
             echo "|:-------------:|:-------------:|:-----------------:|" >> "$release_note_file"
             for file in installers/docker_desktop_installer_*.* docker_install.sh; do
               if [ -f "$file" ]; then
@@ -109,17 +122,23 @@ jobs:
             done
             echo "" >> "$release_note_file"
 
-            # Closing statement
-            echo "🔗 For more information, please visit [Docker Official Documentation](https://docs.docker.com)." >> "$release_note_file"
+            # 更新日志
+            echo "## 更新日志 📜" >> "$release_note_file"
             echo "" >> "$release_note_file"
-            echo "Thank you for using Docker! Should you have any questions or need support, feel free to reach out to us. 🙌" >> "$release_note_file"
+            echo "${{ env.changelog }}" >> "$release_note_file"
+            echo "" >> "$release_note_file"
+
+            # 结束语
+            echo "🔗 更多信息，请访问 [Docker 官方文档](https://docs.docker.com)。" >> "$release_note_file"
+            echo "" >> "$release_note_file"
+            echo "感谢您使用 Docker！如有任何问题或需要支持，请随时联系我们。🙌" >> "$release_note_file"
             
-            # Show the generated release notes
+            # 显示生成的发布说明
             cat "$release_note_file"
           }
           generate_release_notes
 
-      - name: Delete Existing Release (if any)
+      - name: 删除现有发布（如果存在）
         id: delete_release
         uses: actions/github-script@v6
         with:
@@ -135,17 +154,17 @@ jobs:
                 repo: context.repo.repo,
                 release_id: existingRelease.id,
               });
-              console.log(`Deleted existing release with tag "latest".`);
+              console.log(`已删除标签为 "latest" 的现有发布。`);
             } else {
-              console.log(`No existing release found with tag "latest".`);
+              console.log(`未找到标签为 "latest" 的现有发布。`);
             }
 
-      - name: Create Release
+      - name: 创建发布
         id: release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: "latest"
-          name: "Docker Installer Latest LTS Stable Version ${{ env.version }}"
+          name: "Docker 安装程序 最新 LTS 稳定版本 ${{ env.version }}"
           body_path: release_notes.md
           files: |
             docker_install.sh
@@ -159,7 +178,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Output Release Notes
+      - name: 输出发布说明
         run: |
           cat release_notes.md
         continue-on-error: true
