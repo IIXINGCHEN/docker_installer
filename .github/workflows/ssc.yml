@@ -16,12 +16,14 @@ jobs: # 定义工作流中包含的一个或多个作业
 
       - name: Set up environment # 步骤2：设置运行环境
         run: | # 执行多行shell命令
+          set -euf -o pipefail # 设置bash脚本的严格模式: -e(错误时退出), -u(未定义变量视为错误), -f(禁用通配符), -o pipefail(管道失败则整个管道失败)
           sudo apt-get update -y # 使用sudo权限更新apt包管理器的软件包列表，-y选项表示自动确认所有提示
           sudo apt-get install -y curl # 使用sudo权限安装curl工具，用于进行HTTP请求以下载文件，-y选项自动确认
 
       - name: Retrieve Latest Docker Version # 步骤3：获取最新的Docker引擎稳定版本号
         id: get_latest_version # 为此步骤设置一个ID "get_latest_version"，方便后续步骤引用其输出
         run: | # 执行多行shell命令
+          set -euf -o pipefail # 设置bash脚本的严格模式
           # 通过curl静默(-s)访问Docker官方下载页面，获取Linux x86_64架构的稳定版(stable)静态文件列表
           # 使用grep通过Perl兼容正则表达式(-P)和仅输出匹配部分(-o)的选项，提取所有形如 'docker-X.Y.Z' 中的版本号 'X.Y.Z'
           # (\K会忽略之前匹配到的 "docker-")
@@ -29,7 +31,7 @@ jobs: # 定义工作流中包含的一个或多个作业
           # 使用tail -n 1取排序后的最后一行，即最新的版本号
           latest_version=$(curl -s https://download.docker.com/linux/static/stable/x86_64/ | grep -oP 'docker-\K[0-9]+\.[0-9]+\.[0-9]+' | sort -V | tail -n 1)
           if [ -z "$latest_version" ]; then # 检查获取到的latest_version变量是否为空字符串
-            echo "No stable Docker version found, exiting." # 如果为空，则打印错误信息
+            echo "Error: No stable Docker version found, exiting." # 如果为空，则打印错误信息
             exit 1 # 脚本以失败状态退出，这将导致此步骤失败
           fi
           echo "Latest stable Docker version: $latest_version" # 打印获取到的最新Docker引擎稳定版本号
@@ -37,14 +39,9 @@ jobs: # 定义工作流中包含的一个或多个作业
           # 这样后续步骤可以通过 ${{ env.version }} 来引用这个版本号
           echo "version=$latest_version" >>$GITHUB_ENV
 
-      - name: Restore Installers Cache # 步骤4：恢复安装程序缓存
-        uses: actions/cache@v3 # 使用GitHub官方提供的actions/cache@v3动作
-        with: # 配置cache动作的参数
-          path: installers/ # 指定要缓存或恢复的目录路径为 "installers/"
-          key: docker-installers-${{ env.version }} # 定义缓存的唯一键，包含动态的Docker引擎版本号。如果此版本号的文件已缓存，则会恢复
-
-      - name: Download Docker Installers # 步骤5：下载Docker安装程序
+      - name: Download Docker Installers # 步骤4：下载Docker Desktop安装程序
         run: | # 执行多行shell命令
+          set -euf -o pipefail # 设置bash脚本的严格模式
           INSTALLER_DIR="installers" # 定义安装程序存放的目录名
           mkdir -p "$INSTALLER_DIR" # 创建该目录，-p选项表示如果父目录不存在也会一并创建，且目录已存在时不报错
           
@@ -66,65 +63,79 @@ jobs: # 定义工作流中包含的一个或多个作业
             file_name="docker_desktop_installer_${key}.${extension}" # 构建本地保存的文件名
             file_path="$INSTALLER_DIR/$file_name" # 构建本地保存的完整文件路径
             
-            if [ -f "$file_path" ]; then # 检查目标文件路径是否已经存在一个普通文件 (可能从缓存恢复)
-              echo "$file_name 已存在于缓存中，跳过下载。" # 如果文件已存在，则打印信息并跳过下载
-              continue # 继续下一次循环
-            fi
-            
-            echo "正在从 $url 下载$file_name" # 打印下载信息
-            # 使用curl下载文件：
-            # -L: 跟随HTTP重定向
-            # -o "$file_path": 将下载内容保存到指定的文件路径
-            # "$url": 下载的URL
-            # || { ... }: 如果curl命令失败（返回非0退出码），则执行花括号中的命令
-            curl -L -o "$file_path" "$url" || { echo "下载 $file_name 失败"; exit 1; }
+            echo "正在从 $url 下载 $file_name" # 打印下载信息
+            curl -L -o "$file_path" "$url" || { echo "错误：下载 $file_name 失败"; exit 1; }
             
             if [ ! -s "$file_path" ]; then # 检查下载后的文件是否存在且大小是否大于0 (-s)
-              echo "$file_name 下载失败或文件为空" # 如果文件不存在或为空，打印错误信息
-              exit 1 # 脚本以失败状态退出
+              echo "错误：$file_name 下载失败或文件为空"
+              exit 1
             fi
+            echo "$file_name 下载成功."
           done
 
-      - name: Save Installers Cache # 步骤6：保存安装程序缓存
-        uses: actions/cache@v3 # 再次使用actions/cache@v3动作
-        with: # 配置参数
-          path: installers/ # 指定要缓存的目录路径
-          key: docker-installers-${{ env.version }} # 使用与恢复时相同的键。如果此步骤前 "installers/" 目录内容有变（如下载了新文件），则会更新缓存
-
-      - name: Download Docker Installation Script # 步骤7：下载Docker引擎的便捷安装脚本
+      - name: Download Docker Installation Script # 步骤5：下载Docker引擎的便捷安装脚本
         run: | # 执行多行shell命令
+          set -euf -o pipefail # 设置bash脚本的严格模式
+          INSTALLER_DIR="installers" # 定义安装程序存放的目录名
+          mkdir -p "$INSTALLER_DIR" # 确保目录存在
           SCRIPT_URL="https://get.docker.com" # Docker引擎安装脚本的URL
-          SCRIPT_FILE="docker_install.sh" # 本地保存的文件名
-          echo "正在下载 Docker 安装脚本 $SCRIPT_URL" # 打印下载信息
-          # 使用curl静默(-s)且跟随重定向(-L)下载脚本
-          curl -sL -o "$SCRIPT_FILE" "$SCRIPT_URL" || { echo "下载 $SCRIPT_FILE 失败"; exit 1; }
+          SCRIPT_FILE_NAME="docker_install.sh" # Docker引擎安装脚本的文件名
+          SCRIPT_FILE_PATH="$INSTALLER_DIR/$SCRIPT_FILE_NAME" # 本地保存的完整文件路径
+          echo "正在下载 Docker 安装脚本 $SCRIPT_URL 到 $SCRIPT_FILE_PATH" # 打印下载信息
+          curl -sL -o "$SCRIPT_FILE_PATH" "$SCRIPT_URL" || { echo "错误：下载 $SCRIPT_FILE_NAME 失败"; exit 1; }
+          echo "$SCRIPT_FILE_NAME 下载成功."
 
-      - name: Prepare Release Notes # 步骤8：准备Release的说明文档 (Release Notes)
+      - name: Download Docker Engine Static Binary (Linux x86_64) # 步骤6：下载Docker引擎静态二进制包
         run: | # 执行多行shell命令
+          set -euf -o pipefail # 设置bash脚本的严格模式
+          INSTALLER_DIR="installers" # 定义安装程序存放的目录名
+          ENGINE_VERSION="${{ env.version }}" # 从 'Retrieve Latest Docker Version' 步骤获取的Docker引擎版本
+          
+          if [ -z "$ENGINE_VERSION" ]; then # 检查ENGINE_VERSION是否为空
+            echo "错误：Docker引擎版本 (env.version) 未获取到，无法下载静态二进制包。"
+            exit 1
+          fi
+          
+          STATIC_BINARY_FILE_NAME="docker-${ENGINE_VERSION}.tgz" # 构造静态二进制包的文件名
+          STATIC_BINARY_URL="https://download.docker.com/linux/static/stable/x86_64/${STATIC_BINARY_FILE_NAME}" # 构造下载URL
+          
+          mkdir -p "$INSTALLER_DIR" # 再次确保目录存在
+          echo "正在下载 Docker 引擎静态二进制包: $STATIC_BINARY_URL" # 打印下载信息
+          curl -L -o "$INSTALLER_DIR/$STATIC_BINARY_FILE_NAME" "$STATIC_BINARY_URL" || { echo "错误：下载 $STATIC_BINARY_FILE_NAME 失败"; exit 1; }
+          
+          if [ ! -s "$INSTALLER_DIR/$STATIC_BINARY_FILE_NAME" ]; then # 检查下载后的文件是否存在且大小是否大于0
+            echo "错误：$STATIC_BINARY_FILE_NAME 下载失败或文件为空"
+            exit 1
+          fi
+          echo "$STATIC_BINARY_FILE_NAME 下载成功到 $INSTALLER_DIR/."
+
+      - name: Prepare Release Notes # 步骤7：准备Release的说明文档 (Release Notes)
+        run: | # 执行多行shell命令
+          set -euf -o pipefail # 设置bash脚本的严格模式
           generate_release_notes() { # 定义一个名为generate_release_notes的bash函数
+            INSTALLER_DIR="installers" # 明确定义下载产物目录，确保函数内可用
             local release_note_file="release_notes.md" # 定义Release Notes文件名 (本地变量)
 
             # 生成Markdown文件的头部信息
-            echo "# Docker Installer - Latest LTS Stable Version 🚀" > "$release_note_file" # 写入主标题到文件 (覆盖写入)
+            echo "# Docker Installer - Latest Available Versions 🚀" > "$release_note_file" # 主标题 (覆盖写入)
             echo "" >> "$release_note_file" # 追加一个空行
-            echo "**Version:** v${{ env.version }}" >> "$release_note_file" # 追加版本信息，使用之前获取的Docker引擎版本
+            echo "**Docker Engine Version (for static binary & get.docker.com script reference):** v${{ env.version }}" >> "$release_note_file" # 版本信息
             echo "" >> "$release_note_file" # 追加一个空行
 
             # 生成引言部分
-            echo "Welcome to the latest release of the Docker Installer. Below you'll find the installers for the latest stable version. Ensure to verify checksums for integrity and security before installation. 💡" >> "$release_note_file"
+            echo "This release contains the latest available Docker installers and tools fetched from their official sources. Ensure to verify checksums for integrity and security before installation. 💡" >> "$release_note_file"
             echo "" >> "$release_note_file"
 
             # 生成包含文件信息的Markdown表格头部
-            echo "| **File Name** | **File Size** | **Modified Date** |" >> "$release_note_file" # 表格标题行
-            echo "|:-------------:|:-------------:|:-----------------:|" >> "$release_note_file" # 表格对齐方式控制行
+            echo "| **File Name** | **File Size** | **Last Modified (UTC)** |" >> "$release_note_file" # 表格标题行
+            echo "|:-------------:|:-------------:|:-----------------------:|" >> "$release_note_file" # 表格对齐方式控制行
             
-            # 遍历installers目录下的所有docker_desktop_installer_*.*文件以及docker_install.sh文件
-            for file in installers/docker_desktop_installer_*.* docker_install.sh; do
-              if [ -f "$file" ]; then # 检查文件是否存在且为普通文件
-                size=$(du -h "$file" | cut -f1) # 使用du -h获取人类可读的文件大小，并用cut取第一列（大小部分）
-                modified_date=$(date -r "$file" '+%Y-%m-%d %H:%M:%S') # 获取文件的最后修改日期，并格式化输出
-                # 追加一行表格数据，包含文件名、大小和修改日期
-                echo "| \`$(basename "$file")\` | $size |$modified_date |" >> "$release_note_file" 
+            # 遍历installers目录下的所有文件
+            for file in "$INSTALLER_DIR"/*; do 
+              if [ -f "$file" ]; then # 检查是否为普通文件
+                size=$(du -h "$file" | cut -f1) # 获取人类可读的文件大小
+                modified_date=$(stat -c %y "$file" | cut -d'.' -f1) # 获取文件的最后修改日期(UTC YYYY-MM-DD HH:MM:SS)
+                echo "| \`$(basename "$file")\` | $size | $modified_date |" >> "$release_note_file" 
               fi
             done
             echo "" >> "$release_note_file" # 追加一个空行
@@ -134,23 +145,23 @@ jobs: # 定义工作流中包含的一个或多个作业
             echo "" >> "$release_note_file"
             echo "Thank you for using Docker! Should you have any questions or need support, feel free to reach out to us. 🙌" >> "$release_note_file"
             
-            # 在Runner的控制台打印生成的Release Notes内容，用于调试或记录
-            echo "--- Generated Release Notes ---"
-            cat "$release_note_file"
-            echo "--- End of Release Notes ---"
+            echo "--- Generated Release Notes ---" # 控制台输出标记
+            cat "$release_note_file" # 在Runner的控制台打印生成的Release Notes内容
+            echo "--- End of Release Notes ---" # 控制台输出标记
           }
           generate_release_notes # 调用定义的bash函数来实际生成Release Notes
 
-      - name: Create Release # 步骤9：创建GitHub Release
+      - name: Create Release # 步骤8：创建GitHub Release
         id: release # 为此步骤设置ID "release"
         uses: softprops/action-gh-release@v2 # 使用softprops/action-gh-release@v2动作来创建Release
         with: # 配置参数
           tag_name: "latest" # Release的标签名，设置为静态的 "latest" (会覆盖同名旧标签)
-          name: "Docker Installer Latest LTS Stable Version ${{ env.version }}" # Release的名称，包含获取的Docker引擎版本号
+          name: "Docker Installers - Latest Available (Engine v${{ env.version }})" # Release的名称
           body_path: release_notes.md # Release的说明内容从 "release_notes.md" 文件读取
           # 列出要附加到Release的资产文件 (assets)
           files: | # 多行字符串，每行一个文件路径
-            docker_install.sh
+            installers/docker_install.sh
+            installers/docker-${{ env.version }}.tgz
             installers/docker_desktop_installer_windows_x86_64.exe
             installers/docker_desktop_installer_mac_arm64.dmg
             installers/docker_desktop_installer_mac_x86_64.dmg
@@ -161,8 +172,13 @@ jobs: # 定义工作流中包含的一个或多个作业
         env: # 设置此步骤的环境变量
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # 传入GITHUB_TOKEN，用于授权action创建Release
 
-      - name: Output Release Notes # 步骤10：再次输出Release Notes (可选，用于确认)
+      - name: Output Release Notes # 步骤9：再次输出Release Notes (可选，用于确认)
         run: | # 执行多行shell命令
-          echo "Final Release Notes Content:"
-          cat release_notes.md # 在Runner的控制台打印最终的Release Notes内容
-        continue-on-error: true # 即使此步骤失败（例如release_notes.md不存在），也继续执行工作流的后续部分（虽然这里是最后一步了）
+          set -euf -o pipefail # 设置bash脚本的严格模式 (添加如此处也需要处理错误)
+          echo "Final Release Notes Content (from file):"
+          if [ -f "release_notes.md" ]; then # 检查文件是否存在
+             cat "release_notes.md" # 在Runner的控制台打印最终的Release Notes内容
+          else
+             echo "Warning: release_notes.md not found." # 如果文件不存在，则打印警告
+          fi
+        continue-on-error: true # 即使此步骤失败，也继续执行工作流（虽然是最后的可执行用户步骤）
