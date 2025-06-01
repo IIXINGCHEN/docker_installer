@@ -1,0 +1,50 @@
+# .github/workflows/docker_downloader.yml
+name: Docker Installer Download
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '00 23 * * *'
+
+permissions:
+  contents: write
+
+jobs:
+  download_installer:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Download installers
+      run: |
+         curl -L -o install_docker.sh "https://get.docker.com"
+         curl -L -o docker_desktop_installer_windows_x86_64.exe "https://desktop.docker.com/win/main/amd64/Docker%20Desktop%20Installer.exe"
+         curl -L -o docker_desktop_installer_mac_arm64.dmg "https://desktop.docker.com/mac/main/arm64/Docker.dmg"
+         curl -L -o docker_desktop_installer_mac_x86_64.dmg "https://desktop.docker.com/mac/main/amd64/Docker.dmg"
+         curl -L -o docker-desktop-4.30.0-amd64.deb "https://desktop.docker.com/linux/main/amd64/149282/docker-desktop-4.30.0-amd64.deb" # Pinned to version 4.30.0
+         curl -L -o docker-desktop-4.30.0-x86_64.rpm "https://desktop.docker.com/linux/main/amd64/149282/docker-desktop-4.30.0-x86_64.rpm" # Pinned to version 4.30.0
+
+    - name: Generate release tag
+      run: echo "RELEASE_TAG=nightly-$(date +'%Y-%m-%d-%H%M%S')" >> $GITHUB_ENV
+
+    - name: Release
+      uses: softprops/action-gh-release@v2
+      with:
+        files: |
+          install_docker.sh
+          docker_desktop_installer_windows_x86_64.exe
+          docker_desktop_installer_mac_arm64.dmg
+          docker_desktop_installer_mac_x86_64.dmg
+          docker-desktop-4.30.0-amd64.deb
+          docker-desktop-4.30.0-x86_64.rpm
+        tag_name: ${{ env.RELEASE_TAG }}
+        body: |
+          Automated nightly build of Docker installers.
+          - Docker Install Script (get.docker.com)
+          - Docker Desktop for Windows (x86_64)
+          - Docker Desktop for Mac (arm64)
+          - Docker Desktop for Mac (x86_64)
+          - Docker Desktop for Linux Debian 4.30.0 (amd64)
+          - Docker Desktop for Linux Fedora 4.30.0 (x86_64)
