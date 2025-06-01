@@ -115,38 +115,69 @@ jobs: # 定义工作流中包含的一个或多个作业
           generate_release_notes() { # 定义一个名为generate_release_notes的bash函数
             INSTALLER_DIR="installers" # 明确定义下载产物目录，确保函数内可用
             local release_note_file="release_notes.md" # 定义Release Notes文件名 (本地变量)
+            local engine_version_ref="v${{ env.version }}" # 获取Docker引擎版本供引用
 
-            # 生成Markdown文件的头部信息
-            echo "# Docker Installer - Latest Available Versions 🚀" > "$release_note_file" # 主标题 (覆盖写入)
-            echo "" >> "$release_note_file" # 追加一个空行
-            echo "**Docker Engine Version (for static binary & get.docker.com script reference):** v${{ env.version }}" >> "$release_note_file" # 版本信息
-            echo "" >> "$release_note_file" # 追加一个空行
-
-            # 生成引言部分
-            echo "This release contains the latest available Docker installers and tools fetched from their official sources. Ensure to verify checksums for integrity and security before installation. 💡" >> "$release_note_file"
-            echo "" >> "$release_note_file"
-
-            # 生成包含文件信息的Markdown表格头部
-            echo "| **File Name** | **File Size** | **Last Modified (UTC)** |" >> "$release_note_file" # 表格标题行
-            echo "|:-------------:|:-------------:|:-----------------------:|" >> "$release_note_file" # 表格对齐方式控制行
-            
-            # 遍历installers目录下的所有文件
-            for file in "$INSTALLER_DIR"/*; do 
-              if [ -f "$file" ]; then # 检查是否为普通文件
+            # 预先收集所有文件的Markdown表格行数据
+            local file_data_rows="" # 初始化为空字符串
+            for file in "$INSTALLER_DIR"/*; do # 遍历installers目录下的所有条目
+              if [ -f "$file" ]; then # 检查是否为普通文件 (排除目录等)
+                local filename # 声明局部变量filename
+                filename=$(basename "$file") # 获取文件名
+                local size # 声明局部变量size
                 size=$(du -h "$file" | cut -f1) # 获取人类可读的文件大小
+                local modified_date # 声明局部变量modified_date
                 modified_date=$(stat -c %y "$file" | cut -d'.' -f1) # 获取文件的最后修改日期(UTC YYYY-MM-DD HH:MM:SS)
-                echo "| \`$(basename "$file")\` | $size | $modified_date |" >> "$release_note_file" 
+                # 将格式化后的Markdown表格行追加到变量，注意使用printf确保\n被正确处理为换行符
+                file_data_rows=$(printf "%s| \`%s\` | %s | %s |\n" "$file_data_rows" "$filename" "$size" "$modified_date")
               fi
             done
-            echo "" >> "$release_note_file" # 追加一个空行
 
-            # 生成结束语和链接
-            echo "🔗 For more information, please visit [Docker Official Documentation](https://docs.docker.com)." >> "$release_note_file"
-            echo "" >> "$release_note_file"
-            echo "Thank you for using Docker! Should you have any questions or need support, feel free to reach out to us. 🙌" >> "$release_note_file"
-            
-            echo "--- Generated Release Notes ---" # 控制台输出标记
-            cat "$release_note_file" # 在Runner的控制台打印生成的Release Notes内容
+            # 使用命令组和重定向一次性生成完整的release_notes.md文件内容
+            {
+              # --- 1. 主标题 (双语) ---
+              echo "## 🐳 Docker Installers / Docker 安装程序 - Engine ${engine_version_ref} 🚀"
+              echo "" # 空行用于Markdown渲染间距
+              # --- 2. 统一的简短引言 (双语) ---
+              echo "This document provides download links for various Docker installers and tools, fetched from official sources. The Docker Engine version reference above applies to the static binary and the \`get.docker.com\` script."
+              echo "本文档提供了各 Docker 安装程序和工具的下载链接，均从官方源获取。上述 Docker 引擎版本号适用于静态二进制包及 \`get.docker.com\` 脚本。"
+              echo ""
+              echo "---" # Markdown水平分割线
+
+              # --- 3. 英文区段 ---
+              echo "## 🇬🇧 English Section"
+              echo ""
+              echo "### Introduction" # 英文区段小标题
+              echo "This release provides the latest available Docker installers and tools, fetched directly from their official sources. Please verify checksums (if available from source) before installation for maximum security. 💡"
+              echo ""
+              echo "### Downloads" # 英文下载列表小标题
+              echo "| File Name | Size | Last Modified (UTC) |" # 英文表格头
+              echo "|:----------|:-----|:--------------------|" # 英文表格对齐控制
+              echo -e "$file_data_rows" # 输出之前收集并格式化好的文件数据行 (echo -e 使\n生效)
+              echo ""
+              echo "### Notes" # 英文备注小标题
+              echo "🔗 For more information, please visit the [Docker Official Documentation](https://docs.docker.com)."
+              echo "🙌 Thank you for using Docker!"
+              echo ""
+              echo "---" # Markdown水平分割线
+
+              # --- 4. 中文区段 ---
+              echo "## 🇨🇳 中文说明"
+              echo ""
+              echo "### 简介" # 中文区段小标题
+              echo "此版本提供了从官方来源获取的最新可用 Docker 安装程序和工具。为确保最大程度的安全，请在安装前校验文件的校验和（如果官方源提供）。💡"
+              echo ""
+              echo "### 下载列表" # 中文下载列表小标题
+              echo "| 文件名      | 文件大小 | 最后修改日期 (UTC)    |" # 中文表格头
+              echo "|:----------|:-------|:-----------------------:|" # 中文表格对齐控制 (可根据实际内容调整)
+              echo -e "$file_data_rows" # 再次输出文件数据行
+              echo ""
+              echo "### 备注" # 中文备注小标题
+              echo "🔗 获取更多信息，请访问 [Docker 官方文档](https://docs.docker.com)。"
+              echo "🙌 感谢您使用 Docker！"
+            } > "$release_note_file" # 将以上所有echo的输出重定向到release_note_file文件
+
+            echo "--- Generated Release Notes (Content below will be in the GitHub Release) ---" # 控制台输出标记
+            cat "$release_note_file" # 在Runner的控制台打印生成的Release Notes内容，用于调试或记录
             echo "--- End of Release Notes ---" # 控制台输出标记
           }
           generate_release_notes # 调用定义的bash函数来实际生成Release Notes
@@ -174,7 +205,7 @@ jobs: # 定义工作流中包含的一个或多个作业
 
       - name: Output Release Notes # 步骤9：再次输出Release Notes (可选，用于确认)
         run: | # 执行多行shell命令
-          set -euf -o pipefail # 设置bash脚本的严格模式 (添加如此处也需要处理错误)
+          set -euf -o pipefail # 设置bash脚本的严格模式
           echo "Final Release Notes Content (from file):"
           if [ -f "release_notes.md" ]; then # 检查文件是否存在
              cat "release_notes.md" # 在Runner的控制台打印最终的Release Notes内容
