@@ -115,27 +115,62 @@ jobs: # 定义工作流中包含的一个或多个作业
           generate_release_notes() { # 定义一个名为generate_release_notes的bash函数
             INSTALLER_DIR="installers" # 明确定义下载产物目录，确保函数内可用
             local release_note_file="release_notes.md" # 定义Release Notes文件名 (本地变量)
-            local engine_version_ref="v${{ env.version }}" # 获取Docker引擎版本供引用
+            # 获取Docker引擎版本供引用，注意：env.version本身不带'v'，在显示时按需添加
+            local engine_version_from_env="${{ env.version }}" 
+            local engine_version_display="v${engine_version_from_env}" # 用于显示的带'v'的版本
 
             # 预先收集所有文件的Markdown表格行数据
             local file_data_rows="" # 初始化为空字符串
-            for file in "$INSTALLER_DIR"/*; do # 遍历installers目录下的所有条目
-              if [ -f "$file" ]; then # 检查是否为普通文件 (排除目录等)
+            local current_description="" # 用于存储当前文件的描述 (英文)
+
+            for file_path_in_loop in "$INSTALLER_DIR"/*; do # 遍历installers目录下的所有条目
+              if [ -f "$file_path_in_loop" ]; then # 检查是否为普通文件 (排除目录等)
                 local filename # 声明局部变量filename
-                filename=$(basename "$file") # 获取文件名
+                filename=$(basename "$file_path_in_loop") # 获取文件名
                 local size # 声明局部变量size
-                size=$(du -h "$file" | cut -f1) # 获取人类可读的文件大小
+                size=$(du -h "$file_path_in_loop" | cut -f1) # 获取人类可读的文件大小
                 local modified_date # 声明局部变量modified_date
-                modified_date=$(stat -c %y "$file" | cut -d'.' -f1) # 获取文件的最后修改日期(UTC YYYY-MM-DD HH:MM:SS)
-                # 将格式化后的Markdown表格行追加到变量，注意使用printf确保\n被正确处理为换行符
-                file_data_rows=$(printf "%s| \`%s\` | %s | %s |\n" "$file_data_rows" "$filename" "$size" "$modified_date")
+                modified_date=$(stat -c %y "$file_path_in_loop" | cut -d'.' -f1) # 获取文件的最后修改日期(UTC YY-MM-DD HH:MM:SS)
+                local sha256_hash # 新增：SHA256哈希
+                sha256_hash=$(sha256sum "$file_path_in_loop" | cut -d' ' -f1) # 计算SHA256校验和
+
+                # 根据文件名生成描述 (英文)
+                case "$filename" in
+                  "docker_install.sh")
+                    current_description="Docker Engine Installation Script (Linux)" ;;
+                  "docker-${engine_version_from_env}.tgz") # 使用不带'v'的引擎版本进行匹配
+                    current_description="Docker Engine Static Binary ${engine_version_display} (Linux x86_64)" ;;
+                  "docker_desktop_installer_windows_x86_64.exe")
+                    current_description="Docker Desktop for Windows (x86_64)" ;;
+                  "docker_desktop_installer_mac_arm64.dmg")
+                    current_description="Docker Desktop for macOS (Apple Silicon, arm64)" ;;
+                  "docker_desktop_installer_mac_x86_64.dmg")
+                    current_description="Docker Desktop for macOS (Intel, x86_64)" ;;
+                  "docker_desktop_installer_linux_debian_x86_64.deb"|\
+                  "docker_desktop_installer_linux_ubuntu_x86_64.deb")
+                    current_description="Docker Desktop for Linux (Debian/Ubuntu, .deb)" ;;
+                  "docker_desktop_installer_linux_fedora_x86_64.rpm"|\
+                  "docker_desktop_installer_linux_centos_x86_64.rpm")
+                    current_description="Docker Desktop for Linux (Fedora/RHEL, .rpm)" ;;
+                  *)
+                    current_description="Installer/Tool" ;; # 默认描述
+                esac
+                
+                # 将格式化后的Markdown表格行追加到变量，包含新增的描述和SHA256哈希
+                file_data_rows=$(printf "%s| \`%s\` | %s | %s | \`%s\` | %s |\n" \
+                                        "$file_data_rows" \
+                                        "$filename" \
+                                        "$current_description" \
+                                        "$size" \
+                                        "$sha256_hash" \
+                                        "$modified_date")
               fi
             done
 
             # 使用命令组和重定向一次性生成完整的release_notes.md文件内容
             {
               # --- 1. 主标题 (双语) ---
-              echo "## 🐳 Docker Installers / Docker 安装程序 - Engine ${engine_version_ref} 🚀"
+              echo "## 🐳 Docker Installers / Docker 安装程序 - Engine ${engine_version_display} 🚀"
               echo "" # 空行用于Markdown渲染间距
               # --- 2. 统一的简短引言 (双语) ---
               echo "This document provides download links for various Docker installers and tools, fetched from official sources. The Docker Engine version reference above applies to the static binary and the \`get.docker.com\` script."
@@ -147,11 +182,11 @@ jobs: # 定义工作流中包含的一个或多个作业
               echo "## 🇬🇧 English Section"
               echo ""
               echo "### Introduction" # 英文区段小标题
-              echo "This release provides the latest available Docker installers and tools, fetched directly from their official sources. Please verify checksums (if available from source) before installation for maximum security. 💡"
+              echo "This release provides the latest available Docker installers and tools, fetched directly from their official sources. For enhanced security, please verify the SHA256 checksums listed below before installation. 💡" # 更新提示校验和
               echo ""
               echo "### Downloads" # 英文下载列表小标题
-              echo "| File Name | Size | Last Modified (UTC) |" # 英文表格头
-              echo "|:----------|:-----|:--------------------|" # 英文表格对齐控制
+              echo "| File Name | Description | Size | SHA256 Checksum | Last Modified (UTC) |" # 英文表格头 (5列)
+              echo "|:----------|:------------|:-----|:----------------|:--------------------|" # 英文表格对齐控制 (5列)
               echo -e "$file_data_rows" # 输出之前收集并格式化好的文件数据行 (echo -e 使\n生效)
               echo ""
               echo "### Notes" # 英文备注小标题
@@ -164,11 +199,11 @@ jobs: # 定义工作流中包含的一个或多个作业
               echo "## 🇨🇳 中文说明"
               echo ""
               echo "### 简介" # 中文区段小标题
-              echo "此版本提供了从官方来源获取的最新可用 Docker 安装程序和工具。为确保最大程度的安全，请在安装前校验文件的校验和（如果官方源提供）。💡"
+              echo "此版本提供了从官方来源获取的最新可用 Docker 安装程序和工具。为增强安全性，请在安装前校验下方列出的 SHA256 校验和。💡" # 更新提示校验和
               echo ""
               echo "### 下载列表" # 中文下载列表小标题
-              echo "| 文件名      | 文件大小 | 最后修改日期 (UTC)    |" # 中文表格头
-              echo "|:----------|:-------|:-----------------------:|" # 中文表格对齐控制 (可根据实际内容调整)
+              echo "| 文件名 | 文件说明 | 文件大小 | SHA256 校验和 | 最后修改日期 (UTC) |" # 中文表格头 (5列)
+              echo "|:-------|:-----------|:-------|:----------------|:--------------------|" # 中文表格对齐控制 (5列)
               echo -e "$file_data_rows" # 再次输出文件数据行
               echo ""
               echo "### 备注" # 中文备注小标题
