@@ -4,7 +4,7 @@ name: Docker Installer Download
 on:
   workflow_dispatch:
   schedule:
-    - cron: '00 23 * * *'
+    - cron: '00 23 * * *' # Runs at 23:00 UTC daily
 
 permissions:
   contents: write
@@ -26,8 +26,10 @@ jobs:
          curl -L -o docker-desktop-4.30.0-amd64.deb "https://desktop.docker.com/linux/main/amd64/149282/docker-desktop-4.30.0-amd64.deb" # Pinned to version 4.30.0
          curl -L -o docker-desktop-4.30.0-x86_64.rpm "https://desktop.docker.com/linux/main/amd64/149282/docker-desktop-4.30.0-x86_64.rpm" # Pinned to version 4.30.0
 
-    - name: Generate release tag
-      run: echo "RELEASE_TAG=nightly-$(date +'%Y-%m-%d-%H%M%S')" >> $GITHUB_ENV
+    - name: Generate release tag and date
+      run: |
+        echo "RELEASE_TAG=nightly-$(date +'%Y-%m-%d-%H%M%S')" >> $GITHUB_ENV
+        echo "HUMAN_DATE=$(date +'%Y-%m-%d %H:%M:%S UTC')" >> $GITHUB_ENV
 
     - name: Release
       uses: softprops/action-gh-release@v2
@@ -41,10 +43,32 @@ jobs:
           docker-desktop-4.30.0-x86_64.rpm
         tag_name: ${{ env.RELEASE_TAG }}
         body: |
-          Automated nightly build of Docker installers.
-          - Docker Install Script (get.docker.com)
-          - Docker Desktop for Windows (x86_64)
-          - Docker Desktop for Mac (arm64)
-          - Docker Desktop for Mac (x86_64)
-          - Docker Desktop for Linux Debian 4.30.0 (amd64)
-          - Docker Desktop for Linux Fedora 4.30.0 (x86_64)
+          ## 🐳 Docker Installers - Automated Build (${{ env.HUMAN_DATE }})
+
+          This release contains Docker installers automatically fetched on the date mentioned above.
+
+          ---
+
+          ### English Description
+
+          **Included Files:**
+          * `install_docker.sh`: Docker Engine Install Script (Linux)
+          * `docker_desktop_installer_windows_x86_64.exe`: Docker Desktop for Windows (Intel x86_64)
+          * `docker_desktop_installer_mac_arm64.dmg`: Docker Desktop for Mac (Apple Silicon arm64)
+          * `docker_desktop_installer_mac_x86_64.dmg`: Docker Desktop for Mac (Intel x86_64)
+          * `docker-desktop-4.30.0-amd64.deb`: Docker Desktop 4.30.0 for Linux (Debian, amd64)
+          * `docker-desktop-4.30.0-x86_64.rpm`: Docker Desktop 4.30.0 for Linux (Fedora, x86_64)
+
+          ---
+
+          ### 中文说明
+
+          **包含文件:**
+          * `install_docker.sh`: Docker 引擎安装脚本 (Linux)
+          * `docker_desktop_installer_windows_x86_64.exe`: Docker Desktop 桌面版 - Windows (Intel x86_64)
+          * `docker_desktop_installer_mac_arm64.dmg`: Docker Desktop 桌面版 - Mac (Apple Silicon arm64)
+          * `docker_desktop_installer_mac_x86_64.dmg`: Docker Desktop 桌面版 - Mac (Intel x86_64)
+          * `docker-desktop-4.30.0-amd64.deb`: Docker Desktop 4.30.0 桌面版 - Linux (Debian, amd64)
+          * `docker-desktop-4.30.0-x86_64.rpm`: Docker Desktop 4.30.0 桌面版 - Linux (Fedora, x86_64)
+
+          Fetched by automated workflow. Release tag: `${{ env.RELEASE_TAG }}`
