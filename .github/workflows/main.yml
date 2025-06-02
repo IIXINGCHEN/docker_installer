@@ -109,6 +109,7 @@ jobs:
           generate_release_notes() {
             INSTALLER_DIR="installers"
             local release_note_file="release_notes.md"
+            local assets_table_file="assets_table.md"
             local engine_version_from_env="${{ env.version }}"
             local engine_version_display="v${engine_version_from_env}"
             local current_date=$(date -u +"%Y-%m-%d %H:%M:%S UTC")
@@ -126,11 +127,15 @@ jobs:
 
             if [ "$file_count" -gt 0 ]; then
               # English Table Header and Aligner
-              table_rows_en="| Icon | Filename                           | Description                                      | Size     | SHA256                                   | Last Modified (UTC)   |\n"
-              table_rows_en+="| :--: | :--------------------------------- | :----------------------------------------------- | :-------: | :--------------------------------------- | :-------------------- |\n"
+              table_rows_en="# **Available Assets** 🗂️\n\n"
+              table_rows_en+="> **Total Assets**: ${file_count} files available for download\n\n"
+              table_rows_en+="| **Icon** | **Filename**                       | **Description**                                  | **Size**     | **SHA256**                               | **Last Modified (UTC)** |\n"
+              table_rows_en+="| :------: | :--------------------------------- | :----------------------------------------------- | :----------: | :--------------------------------------- | :---------------------- |\n"
               # Chinese Table Header and Aligner
-              table_rows_zh="| 图标 | 文件名                             | 文件说明                                         | 大小     | SHA256 校验和                            | 最后修改日期 (UTC)   |\n"
-              table_rows_zh+="| :--: | :--------------------------------- | :----------------------------------------------- | :-------: | :--------------------------------------- | :-------------------- |\n"
+              table_rows_zh="# **可用资产文件** 🗂️\n\n"
+              table_rows_zh+="> **资产数量**：${file_count} 个文件可供下载\n\n"
+              table_rows_zh+="| **图标** | **文件名**                         | **文件说明**                                     | **大小**     | **SHA256 校验和**                        | **最后修改日期 (UTC)** |\n"
+              table_rows_zh+="| :------: | :--------------------------------- | :----------------------------------------------- | :----------: | :--------------------------------------- | :---------------------- |\n"
 
               for file_path_in_loop in "${files_to_process[@]}"; do
                 local filename
@@ -158,8 +163,8 @@ jobs:
                     current_description_zh="Docker Desktop Windows 版（x86_64）"
                     file_icon="🪟" ;;
                   "docker_desktop_installer_mac_arm64.dmg")
-                    current_description="Docker Desktop for macOS (Apple Silicon, arm64)"
-                    current_description_zh="Docker Desktop macOS 版（Apple Silicon，arm64）"
+                    current_description="Docker Desktop for macOS (Jul Silicon, arm64)"
+                    current_description_zh="Docker Desktop macOS 版（Jul Silicon，arm64）"
                     file_icon="🍎" ;;
                   "docker_desktop_installer_mac_x86_64.dmg")
                     current_description="Docker Desktop for macOS (Intel, x86_64)"
@@ -181,75 +186,84 @@ jobs:
                     file_icon="🗄️" ;;
                 esac
                 
-                table_rows_en+=$(printf "| %s | \`%s\` | %s | %s | \`%s\` | %s |\n" \
+                table_rows_en+=$(printf "| %s | \`%s\` | %s | %10s | \`%s\` | %s |\n" \
                                           "$file_icon" "$filename" "$current_description" "$size" "$sha256_hash" "$modified_date")
                 
-                table_rows_zh+=$(printf "| %s | \`%s\` | %s | %s | \`%s\` | %s |\n" \
+                table_rows_zh+=$(printf "| %s | \`%s\` | %s | %10s | \`%s\` | %s |\n" \
                                           "$file_icon" "$filename" "$current_description_zh" "$size" "$sha256_hash" "$modified_date")
               done
+
+              # Write assets table to assets_table.md
+              {
+                echo "<!-- -*- coding: utf-8 -*- -->"
+                echo "${table_rows_en}"
+                echo ""
+                echo "---"
+                echo ""
+                echo "${table_rows_zh}"
+              } > "$assets_table_file"
             fi
 
+            # Write release notes
             {
               echo "<!-- -*- coding: utf-8 -*- -->"
-              echo "# 🐳 Docker Installers Release - Engine ${engine_version_display} 🚀"
+              echo "# 🐳 **Docker Installers Release - Engine *${engine_version_display}* ** 🚀"
               echo ""
-              echo "> **Generated on**: ${current_date}"
+              echo "> **Generated on**: *${current_date}*"
               echo ""
               echo "This release provides the latest Docker installers and tools, fetched from official sources. The Docker Engine version above applies to the static binary and the \`get.docker.com\` script."
               echo "本次发布提供从官方来源获取的最新 Docker 安装程序和工具。上述 Docker 引擎版本适用于静态二进制文件及 \`get.docker.com\` 脚本。"
               echo ""
               echo "---"
-              echo "## 🇬🇧 Available Assets"
+              echo "## 🇬🇧 **Available Assets** 🗂️"
               echo ""
-              echo "**Overview**"
-              echo "The following assets are available for download. Verify the SHA256 checksums before installation to ensure integrity. For detailed instructions, see the [Installation Guide](#installation-guide)."
+              echo "> **Overview**"
+              echo "> The default 'Assets' section below uses a list style managed by GitHub, which cannot be customized directly. For a detailed and formatted table with SHA256 checksums, please see the linked file."
               echo ""
-              echo "**Assets (Count: ${file_count})**"
               if [ "$file_count" -gt 0 ]; then
-                echo "${table_rows_en}"
+                echo "**[📋 View Detailed Assets Table](assets_table.md)**"
               else
                 echo "*No assets available for this release at this time.*"
               fi
               echo ""
-              echo "## 🇨🇳 可用资产文件"
+              echo "## 🇨🇳 **可用资产文件** 🗂️"
               echo ""
-              echo "**概述**"
-              echo "以下为可下载的资产文件。请在安装前校验 SHA256 校验和以确保完整性。详细说明请参阅[安装指南](#installation-guide)。"
+              echo "> **概述**"
+              echo "> 默认的 'Assets' 部分使用 GitHub 管理的列表样式，无法直接自定义。如需查看详细表格（包含 SHA256 校验和），请点击下方链接。"
               echo ""
-              echo "**资产文件 (数量: ${file_count})**"
               if [ "$file_count" -gt 0 ]; then
-                echo "${table_rows_zh}"
+                echo "**[📋 查看详细资产表格](assets_table.md)**"
               else
                 echo "*本次发布暂时没有可用的资产文件。*"
               fi
               echo ""
               echo "---"
-              echo "## Installation Guide"
+              echo "## **Installation Guide** 📚"
               echo ""
-              echo "### 🇬🇧 How to Install"
-              echo "1. **Download**: Select the appropriate installer for your platform from the table above."
-              echo "2. **Verify**: Use the SHA256 checksum to verify the downloaded file."
+              echo "### 🇬🇧 **How to Install**"
+              echo "1. **Download**: Select the appropriate installer from the 'Assets' section below or the detailed table."
+              echo "2. **Verify**: Use the SHA256 checksum from the table to verify the downloaded file."
               echo "3. **Install**: Follow the official [Docker Installation Instructions](https://docs.docker.com/get-docker/)."
               echo "4. **Get Support**: Visit the [Docker Community](https://www.docker.com/community/) for help."
               echo ""
-              echo "[📘 View Full Documentation](https://docs.docker.com) | [📩 Submit Feedback](https://github.com/docker/docker.github.io/issues)"
+              echo "**[📘 View Full Documentation](https://docs.docker.com)** | **[📩 Submit Feedback](https://github.com/docker/docker.github.io/issues)**"
               echo ""
-              echo "### 🇨🇳 安装指南"
-              echo "1. **下载**：从上方表格中选择适合您平台的安装程序。"
-              echo "2. **校验**：使用 SHA256 校验和验证下载文件的完整性。"
+              echo "### 🇨🇳 **安装指南**"
+              echo "1. **下载**：从下方 'Assets' 部分或详细表格中选择适合您平台的安装程序。"
+              echo "2. **校验**：使用表格中的 SHA256 校验和验证下载文件的完整性。"
               echo "3. **安装**：按照官方 [Docker 安装说明](https://docs.docker.com/get-docker/) 进行安装。"
               echo "4. **获取支持**：访问 [Docker 社区](https://www.docker.com/community/) 获取帮助。"
               echo ""
-              echo "[📘 查看完整文档](https://docs.docker.com) | [📩 提交反馈](https://github.com/docker/docker.github.io/issues)"
+              echo "**[📘 查看完整文档](https://docs.docker.com)** | **[📩 提交反馈](https://github.com/docker/docker.github.io/issues)**"
               echo ""
-              echo "> **Note**: Always download from official sources to ensure security and compatibility. 🙌 Thank you for using Docker!"
+              echo "> **Note**: Always download from official sources to ensure security and compatibility. 🙌 **Thank you for using Docker!**"
             } > "$release_note_file"
 
             echo "--- Generated Release Notes (Content below will be in the GitHub Release) ---"
             cat "$release_note_file"
             echo "--- End of Release Notes ---"
           }
-          generate_release_notes
+          generate붕 generate_release_notes
 
       - name: Create Release
         id: release
@@ -268,6 +282,7 @@ jobs:
             installers/docker_desktop_installer_linux_fedora_x86_64.rpm
             installers/docker_desktop_installer_linux_ubuntu_x86_64.deb
             installers/docker_desktop_installer_linux_centos_x86_64.rpm
+            assets_table.md
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
