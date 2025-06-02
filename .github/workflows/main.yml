@@ -1,44 +1,45 @@
 # .github/workflows/docker_installer_workflow.yml
-# Production-Ready Code (incorporates all previous fixes and enhancements)
+# Final Production-Ready Code 
+# (Features: Markdown Table for Assets, Aesthetic Enhancements, Accurate File Count, Zero-Count Handling)
 
-name: Docker Installer Workflow # 工作流的名称，将显示在GitHub Actions的UI界面中
+name: Docker Installer Workflow
 
-on: # 定义触发此工作流的事件
-  schedule: # 定时触发器配置
-    - cron: '0 16 * * *'  # CRON表达式，表示每天UTC时间16:00执行 (通常对应中国标准时间CST的次日凌晨0点)
-  workflow_dispatch: {} # 允许通过GitHub Actions UI界面或API手动触发此工作流
+on:
+  schedule:
+    - cron: '0 16 * * *'
+  workflow_dispatch: {}
 
-jobs: # 定义工作流中包含的一个或多个作业
-  download_and_verify: # 作业的唯一ID，此作业负责下载和验证安装程序
-    runs-on: ubuntu-latest # 指定作业运行在GitHub托管的最新版Ubuntu Linux虚拟环境
+jobs:
+  download_and_verify:
+    runs-on: ubuntu-latest
 
-    steps: # 作业中执行的一系列步骤，按顺序执行
-      - name: Checkout repository # 步骤1：检出仓库代码
-        uses: actions/checkout@v4 # 使用GitHub官方提供的actions/checkout@v4动作来检出当前仓库的代码到运行器环境
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-      - name: Set up environment # 步骤2：设置运行环境
-        run: | # 执行多行shell命令
-          set -euf -o pipefail # 设置bash脚本的严格模式: -e(错误时退出), -u(未定义变量视为错误), -f(禁用通配符), -o pipefail(管道失败则整个管道失败)
-          sudo apt-get update -y # 使用sudo权限更新apt包管理器的软件包列表，-y选项表示自动确认所有提示
-          sudo apt-get install -y curl # 使用sudo权限安装curl工具，用于进行HTTP请求以下载文件，-y选项自动确认
+      - name: Set up environment
+        run: |
+          set -euf -o pipefail
+          sudo apt-get update -y
+          sudo apt-get install -y curl
 
-      - name: Retrieve Latest Docker Version # 步骤3：获取最新的Docker引擎稳定版本号
-        id: get_latest_version # 为此步骤设置一个ID "get_latest_version"，方便后续步骤引用其输出
-        run: | # 执行多行shell命令
-          set -euf -o pipefail # 设置bash脚本的严格模式
+      - name: Retrieve Latest Docker Version
+        id: get_latest_version
+        run: |
+          set -euf -o pipefail
           latest_version=$(curl -s https://download.docker.com/linux/static/stable/x86_64/ | grep -oP 'docker-\K[0-9]+\.[0-9]+\.[0-9]+' | sort -V | tail -n 1)
-          if [ -z "$latest_version" ]; then # 检查获取到的latest_version变量是否为空字符串
-            echo "Error: No stable Docker version found, exiting." # 如果为空，则打印错误信息
-            exit 1 # 脚本以失败状态退出，这将导致此步骤失败
+          if [ -z "$latest_version" ]; then
+            echo "Error: No stable Docker version found, exiting."
+            exit 1
           fi
-          echo "Latest stable Docker version: $latest_version" # 打印获取到的最新Docker引擎稳定版本号
+          echo "Latest stable Docker version: $latest_version"
           echo "version=$latest_version" >>$GITHUB_ENV
 
-      - name: Download Docker Installers # 步骤4：下载Docker Desktop安装程序
-        run: | # 执行多行shell命令
-          set -euf -o pipefail # 设置bash脚本的严格模式
-          INSTALLER_DIR="installers" # 定义安装程序存放的目录名
-          mkdir -p "$INSTALLER_DIR" # 创建该目录，-p选项表示如果父目录不存在也会一并创建，且目录已存在时不报错
+      - name: Download Docker Installers
+        run: |
+          set -euf -o pipefail
+          INSTALLER_DIR="installers"
+          mkdir -p "$INSTALLER_DIR"
           
           declare -A installers=(
             ["windows_x86_64"]="https://desktop.docker.com/win/stable/amd64/Docker%20Desktop%20Installer.exe"
@@ -46,8 +47,8 @@ jobs: # 定义工作流中包含的一个或多个作业
             ["mac_x86_64"]="https://desktop.docker.com/mac/stable/amd64/Docker.dmg"
             ["linux_debian_x86_64"]="https://desktop.docker.com/linux/main/amd64/docker-desktop-latest-amd64.deb"
             ["linux_fedora_x86_64"]="https://desktop.docker.com/linux/main/amd64/docker-desktop-latest-x86_64.rpm"
-            ["linux_ubuntu_x86_64"]="https://desktop.docker.com/linux/main/amd64/docker-desktop-latest-amd64.deb" # 与Debian使用相同的最新链接
-            ["linux_centos_x86_64"]="https://desktop.docker.com/linux/main/amd64/docker-desktop-latest-x86_64.rpm" # 与Fedora使用相同的最新链接
+            ["linux_ubuntu_x86_64"]="https://desktop.docker.com/linux/main/amd64/docker-desktop-latest-amd64.deb"
+            ["linux_centos_x86_64"]="https://desktop.docker.com/linux/main/amd64/docker-desktop-latest-x86_64.rpm"
           )
           
           for key in "${!installers[@]}"; do
@@ -66,7 +67,7 @@ jobs: # 定义工作流中包含的一个或多个作业
             echo "$file_name 下载成功."
           done
 
-      - name: Download Docker Installation Script # 步骤5：下载Docker引擎的便捷安装脚本
+      - name: Download Docker Installation Script
         run: |
           set -euf -o pipefail
           INSTALLER_DIR="installers"
@@ -78,7 +79,7 @@ jobs: # 定义工作流中包含的一个或多个作业
           curl -sL -o "$SCRIPT_FILE_PATH" "$SCRIPT_URL" || { echo "错误：下载 $SCRIPT_FILE_NAME 失败"; exit 1; }
           echo "$SCRIPT_FILE_NAME 下载成功."
 
-      - name: Download Docker Engine Static Binary (Linux x86_64) # 步骤6：下载Docker引擎静态二进制包
+      - name: Download Docker Engine Static Binary (Linux x86_64)
         run: |
           set -euf -o pipefail
           INSTALLER_DIR="installers"
@@ -102,7 +103,7 @@ jobs: # 定义工作流中包含的一个或多个作业
           fi
           echo "$STATIC_BINARY_FILE_NAME 下载成功到 $INSTALLER_DIR/."
 
-      - name: Prepare Release Notes # 步骤7：准备Release的说明文档 (Release Notes)
+      - name: Prepare Release Notes
         run: |
           set -euf -o pipefail
           generate_release_notes() {
@@ -111,73 +112,84 @@ jobs: # 定义工作流中包含的一个或多个作业
             local engine_version_from_env="${{ env.version }}" 
             local engine_version_display="v${engine_version_from_env}"
 
-            local file_count
-            file_count=$(find "$INSTALLER_DIR" -maxdepth 1 -type f -print0 | wc -l)
+            # Accurately count files by populating an array first
+            local files_to_process=()
+            while IFS= read -r -d $'\0' f; do files_to_process+=("$f"); done < <(find "$INSTALLER_DIR" -maxdepth 1 -type f -print0)
+            local file_count="${#files_to_process[@]}"
 
-            local file_asset_blocks_en=""
-            local file_asset_blocks_zh=""
-            local current_description="" # 英文描述
-            # local current_description_zh="" # 可选的独立中文描述
+            local table_rows_en=""
+            local table_rows_zh=""
+            
+            local current_description="" 
+            # local current_description_zh="" # Optional: for separate Chinese descriptions
 
-            # 使用进程替换来确保while循环在当前shell上下文中运行
-            while IFS= read -r -d $'\0' file_path_in_loop; do
-              local filename
-              filename=$(basename "$file_path_in_loop")
-              local size
-              size=$(du -h "$file_path_in_loop" | cut -f1)
-              local modified_date
-              modified_date=$(stat -c %y "$file_path_in_loop" | cut -d'.' -f1)
-              local sha256_hash
-              sha256_hash=$(sha256sum "$file_path_in_loop" | cut -d' ' -f1)
-              
-              local file_icon="📦" # Default ICON
+            if [ "$file_count" -gt 0 ]; then
+              # English Table Header and Aligner
+              table_rows_en="| ICON | Filename                   | Description                                  | Size    | SHA256                                 | Last Modified (UTC)   |\n"
+              table_rows_en+="| :--: | :------------------------- | :------------------------------------------- | :------: | :------------------------------------- | :-------------------- |\n"
+              # Chinese Table Header and Aligner
+              table_rows_zh="| 图标 | 文件名                     | 文件说明                                     | 大小    | SHA256 校验和                          | 最后修改日期 (UTC)   |\n"
+              table_rows_zh+="| :--: | :------------------------- | :------------------------------------------- | :------: | :------------------------------------- | :-------------------- |\n"
 
-              case "$filename" in
-                "docker_install.sh")
-                  current_description="Docker Engine Installation Script (Generic Linux)"
-                  # current_description_zh="Docker 引擎安装脚本 (通用 Linux)"
-                  file_icon="📜" ;;
-                "docker-${engine_version_from_env}.tgz")
-                  current_description="Docker Engine Static Binary ${engine_version_display} (Linux x86_64)"
-                  # current_description_zh="Docker 引擎静态二进制文件 ${engine_version_display} (Linux x86_64)"
-                  file_icon="🐧" ;;
-                "docker_desktop_installer_windows_x86_64.exe")
-                  current_description="Docker Desktop for Windows (x86_64)"
-                  # current_description_zh="Docker Desktop Windows 版 (x86_64)"
-                  file_icon="🪟" ;;
-                "docker_desktop_installer_mac_arm64.dmg")
-                  current_description="Docker Desktop for macOS (Apple Silicon, arm64)"
-                  # current_description_zh="Docker Desktop macOS 版 (Apple Silicon, arm64)"
-                  file_icon="🍏" ;;
-                "docker_desktop_installer_mac_x86_64.dmg")
-                  current_description="Docker Desktop for macOS (Intel, x86_64)"
-                  # current_description_zh="Docker Desktop macOS 版 (Intel, x86_64)"
-                  file_icon="🍏" ;;
-                "docker_desktop_installer_linux_debian_x86_64.deb"|\
-                "docker_desktop_installer_linux_ubuntu_x86_64.deb")
-                  current_description="Docker Desktop for Linux (Debian/Ubuntu based, .deb)"
-                  # current_description_zh="Docker Desktop Linux 版 (基于 Debian/Ubuntu, .deb)"
-                  file_icon="🐧" ;;
-                "docker_desktop_installer_linux_fedora_x86_64.rpm"|\
-                "docker_desktop_installer_linux_centos_x86_64.rpm")
-                  current_description="Docker Desktop for Linux (Fedora/RHEL based, .rpm)"
-                  # current_description_zh="Docker Desktop Linux 版 (基于 Fedora/RHEL, .rpm)"
-                  file_icon="🐧" ;;
-                *)
-                  current_description="Utility or Installer File"
-                  # current_description_zh="实用工具或安装文件"
-                  file_icon="📦" ;;
-              esac
-              
-              file_asset_blocks_en+=$(printf "<details>\n  <summary><strong>%s <code>%s</code></strong></summary>\n  <ul style=\"list-style-type: none; padding-left: 20px; margin-top: 5px;\">\n    <li><strong>Description:</strong> %s</li>\n    <li><strong>Size:</strong> %s</li>\n    <li><strong>SHA256:</strong> <code>%s</code></li>\n    <li><strong>Last Modified (UTC):</strong> %s</li>\n  </ul>\n</details>\n<br>\n" \
-                                      "$file_icon" "$filename" "$current_description" "$size" "$sha256_hash" "$modified_date")
-              
-              local effective_description_zh="$current_description" # Default to English description for Chinese section
-              # if [ -n "$current_description_zh" ]; then effective_description_zh="$current_description_zh"; fi # Uncomment to use independent Chinese description
+              for file_path_in_loop in "${files_to_process[@]}"; do
+                local filename
+                filename=$(basename "$file_path_in_loop")
+                local size
+                size=$(du -h "$file_path_in_loop" | cut -f1)
+                local modified_date
+                modified_date=$(stat -c %y "$file_path_in_loop" | cut -d'.' -f1)
+                local sha256_hash
+                sha256_hash=$(sha256sum "$file_path_in_loop" | cut -d' ' -f1)
+                
+                local file_icon="📦" # Default ICON
 
-              file_asset_blocks_zh+=$(printf "<details>\n  <summary><strong>%s <code>%s</code></strong></summary>\n  <ul style=\"list-style-type: none; padding-left: 20px; margin-top: 5px;\">\n    <li><strong>文件说明：</strong> %s</li>\n    <li><strong>文件大小：</strong> %s</li>\n    <li><strong>SHA256 校验和：</strong> <code>%s</code></li>\n    <li><strong>最后修改日期 (UTC)：</strong> %s</li>\n  </ul>\n</details>\n<br>\n" \
-                                      "$file_icon" "$filename" "$effective_description_zh" "$size" "$sha256_hash" "$modified_date")
-            done < <(find "$INSTALLER_DIR" -maxdepth 1 -type f -print0)
+                case "$filename" in
+                  "docker_install.sh")
+                    current_description="Docker Engine Installation Script (Generic Linux)"
+                    # current_description_zh="Docker 引擎安装脚本 (通用 Linux)"
+                    file_icon="📜" ;;
+                  "docker-${engine_version_from_env}.tgz")
+                    current_description="Docker Engine Static Binary ${engine_version_display} (Linux x86_64)"
+                    # current_description_zh="Docker 引擎静态二进制文件 ${engine_version_display} (Linux x86_64)"
+                    file_icon="🐧" ;;
+                  "docker_desktop_installer_windows_x86_64.exe")
+                    current_description="Docker Desktop for Windows (x86_64)"
+                    # current_description_zh="Docker Desktop Windows 版 (x86_64)"
+                    file_icon="🪟" ;;
+                  "docker_desktop_installer_mac_arm64.dmg")
+                    current_description="Docker Desktop for macOS (Apple Silicon, arm64)"
+                    # current_description_zh="Docker Desktop macOS 版 (Apple Silicon, arm64)"
+                    file_icon="🍏" ;;
+                  "docker_desktop_installer_mac_x86_64.dmg")
+                    current_description="Docker Desktop for macOS (Intel, x86_64)"
+                    # current_description_zh="Docker Desktop macOS 版 (Intel, x86_64)"
+                    file_icon="🍏" ;;
+                  "docker_desktop_installer_linux_debian_x86_64.deb"|\
+                  "docker_desktop_installer_linux_ubuntu_x86_64.deb")
+                    current_description="Docker Desktop for Linux (Debian/Ubuntu based, .deb)"
+                    # current_description_zh="Docker Desktop Linux 版 (基于 Debian/Ubuntu, .deb)"
+                    file_icon="🐧" ;;
+                  "docker_desktop_installer_linux_fedora_x86_64.rpm"|\
+                  "docker_desktop_installer_linux_centos_x86_64.rpm")
+                    current_description="Docker Desktop for Linux (Fedora/RHEL based, .rpm)"
+                    # current_description_zh="Docker Desktop Linux 版 (基于 Fedora/RHEL, .rpm)"
+                    file_icon="🐧" ;;
+                  *)
+                    current_description="Utility or Installer File"
+                    # current_description_zh="实用工具或安装文件"
+                    file_icon="📦" ;;
+                esac
+                
+                table_rows_en+=$(printf "| %s | \`%s\` | %s | %s | \`%s\` | %s |\n" \
+                                          "$file_icon" "$filename" "$current_description" "$size" "$sha256_hash" "$modified_date")
+                
+                local effective_description_zh="$current_description" # Default to English description
+                # if [ -n "$current_description_zh" ]; then effective_description_zh="$current_description_zh"; fi
+
+                table_rows_zh+=$(printf "| %s | \`%s\` | %s | %s | \`%s\` | %s |\n" \
+                                          "$file_icon" "$filename" "$effective_description_zh" "$size" "$sha256_hash" "$modified_date")
+              done
+            fi
 
             {
               echo "## 🐳 Docker Installers / Docker 安装程序 - Engine ${engine_version_display} 🚀"
@@ -192,8 +204,13 @@ jobs: # 定义工作流中包含的一个或多个作业
               echo "This release provides the latest available Docker installers and tools, fetched directly from their official sources. For enhanced security, please verify the SHA256 checksums listed below before installation. 💡" 
               echo ""
               echo "### <samp>🗂️</samp> Assets (Count: ${file_count})"
-              echo ""
-              echo -e "${file_asset_blocks_en}"
+              echo "" # Blank line before table or message
+              if [ "$file_count" -gt 0 ]; then
+                echo -e "${table_rows_en}"
+              else
+                echo "*No assets available for this release at this time.*"
+              fi
+              echo "" # Blank line after table or message
               echo "### Notes" 
               echo "🔗 For more information, please visit the [Docker Official Documentation](https://docs.docker.com)."
               echo "🙌 Thank you for using Docker!"
@@ -205,8 +222,13 @@ jobs: # 定义工作流中包含的一个或多个作业
               echo "此版本提供了从官方来源获取的最新可用 Docker 安装程序和工具。为增强安全性，请在安装前校验下方列出的 SHA256 校验和。💡" 
               echo ""
               echo "### <samp>🗂️</samp> 资产文件 (数量: ${file_count})"
-              echo ""
-              echo -e "${file_asset_blocks_zh}"
+              echo "" # Blank line before table or message
+              if [ "$file_count" -gt 0 ]; then
+                echo -e "${table_rows_zh}"
+              else
+                echo "*本次发布暂时没有可用的资产文件。*"
+              fi
+              echo "" # Blank line after table or message
               echo "### 备注" 
               echo "🔗 获取更多信息，请访问 [Docker 官方文档](https://docs.docker.com)。"
               echo "🙌 感谢您使用 Docker！"
@@ -222,10 +244,10 @@ jobs: # 定义工作流中包含的一个或多个作业
         id: release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: "latest" # Release的标签名，设置为静态的 "latest" (会覆盖同名旧标签)
-          name: "Docker Installers - Latest Available (Engine v${{ env.version }})" # Release的名称
-          body_path: release_notes.md # Release的说明内容从 "release_notes.md" 文件读取
-          files: | # 多行字符串，每行一个文件路径
+          tag_name: "latest"
+          name: "Docker Installers - Latest Available (Engine v${{ env.version }})"
+          body_path: release_notes.md
+          files: |
             installers/docker_install.sh
             installers/docker-${{ env.version }}.tgz
             installers/docker_desktop_installer_windows_x86_64.exe
@@ -236,9 +258,9 @@ jobs: # 定义工作流中包含的一个或多个作业
             installers/docker_desktop_installer_linux_ubuntu_x86_64.deb
             installers/docker_desktop_installer_linux_centos_x86_64.rpm
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # 传入GITHUB_TOKEN，用于授权action创建Release
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Output Release Notes # 步骤9：再次输出Release Notes (可选，用于确认)
+      - name: Output Release Notes
         run: |
           set -euf -o pipefail
           echo "Final Release Notes Content (from file):"
@@ -247,4 +269,4 @@ jobs: # 定义工作流中包含的一个或多个作业
           else
              echo "Warning: release_notes.md not found."
           fi
-        continue-on-error: true # 即使此步骤失败，也继续执行工作流
+        continue-on-error: true
