@@ -1,12 +1,12 @@
 # .github/workflows/docker_installer_workflow.yml
 # Final Production-Ready Code 
-# (Features: Removed Asset Display, Retained Installation Guide, Accurate File Count, Improved Formatting)
+# (Features: Installer Cache, Removed Asset Display, Retained Installation Guide, Improved Scheduling)
 
 name: Docker Installer Workflow
 
 on:
   schedule:
-    - cron: '0 16 * * *'
+    - cron: '0 16 * * *'  # 每天北京时间 00:00 (UTC 16:00)
   workflow_dispatch: {}
 
 jobs:
@@ -21,7 +21,7 @@ jobs:
         run: |
           set -euf -o pipefail
           sudo apt-get update -y
-          sudo apt-get install -y curl
+          sudo apt-get install -y curl jq
 
       - name: Retrieve Latest Docker Version
         id: get_latest_version
@@ -35,12 +35,17 @@ jobs:
           echo "Latest stable Docker version: $latest_version"
           echo "version=$latest_version" >>$GITHUB_ENV
 
+      - name: Restore Installers Cache
+        uses: actions/cache@v3
+        with:
+          path: installers/
+          key: docker-installers-${{ env.version }}
+
       - name: Download Docker Installers
         run: |
           set -euf -o pipefail
           INSTALLER_DIR="installers"
           mkdir -p "$INSTALLER_DIR"
-          
           declare -A installers=(
             ["windows_x86_64"]="https://desktop.docker.com/win/stable/amd64/Docker%20Desktop%20Installer.exe"
             ["mac_arm64"]="https://desktop.docker.com/mac/stable/arm64/Docker.dmg"
@@ -50,81 +55,55 @@ jobs:
             ["linux_ubuntu_x86_64"]="https://desktop.docker.com/linux/main/amd64/docker-desktop-latest-amd64.deb"
             ["linux_centos_x86_64"]="https://desktop.docker.com/linux/main/amd64/docker-desktop-latest-x86_64.rpm"
           )
-          
           for key in "${!installers[@]}"; do
             url="${installers[$key]}"
             extension="${url##*.}"
             file_name="docker_desktop_installer_${key}.${extension}"
             file_path="$INSTALLER_DIR/$file_name"
-            
+            if [ -f "$file_path" ]; then
+              echo "$file_name 已存在于缓存中，跳过下载。"
+              continue
+            fi
             echo "Downloading $file_name from $url"
             curl -L -o "$file_path" "$url" || { echo "Error: Failed to download $file_name"; exit 1; }
-            
-            if [ -s "$file_path" ]; then
-              echo "$file_name downloaded successfully."
-            else
+            if [ ! -s "$file_path" ]; then
               echo "Error: $file_name download failed or file is empty"
               exit 1
             fi
           done
 
+      - name: Save Installers Cache
+        uses: actions/cache@v3
+        with:
+          path: installers/
+          key: docker-installers-${{ env.version }}
+
       - name: Download Docker Installation Script
         run: |
           set -euf -o pipefail
-          INSTALLER_DIR="installers"
-          mkdir -p "$INSTALLER_DIR"
           SCRIPT_URL="https://get.docker.com"
-          SCRIPT_FILE_NAME="docker_install.sh"
-          SCRIPT_FILE_PATH="$INSTALLER_DIR/$SCRIPT_FILE_NAME"
-          echo "Downloading Docker installation script $SCRIPT_URL to $SCRIPT_FILE_PATH"
-          curl -sL -o "$SCRIPT_FILE_PATH" "$SCRIPT_URL" || { echo "Error: Failed to download $SCRIPT_FILE_NAME"; exit 1; }
-          echo "$SCRIPT_FILE_NAME downloaded successfully."
-
-      - name: Download Docker Engine Static Binary (Linux x86_64)
-        run: |
-          set -euf -o pipefail
-          INSTALLER_DIR="installers"
-          ENGINE_VERSION="${{ env.version }}"
-          
-          if [ -z "$ENGINE_VERSION" ]; then
-            echo "Error: Docker Engine version (env.version) not retrieved, cannot download static binary."
-            exit 1
-          fi
-          
-          STATIC_BINARY_FILE_NAME="docker-${ENGINE_VERSION}.tgz"
-          STATIC_BINARY_URL="https://download.docker.com/linux/static/stable/x86_64/${STATIC_BINARY_FILE_NAME}"
-          
-          mkdir -p "$INSTALLER_DIR"
-          echo "Downloading Docker Engine static binary: $STATIC_BINARY_URL"
-          curl -L -o "$INSTALLER_DIR/$STATIC_BINARY_FILE_NAME" "$STATIC_BINARY_URL" || { echo "Error: Failed to download $STATIC_BINARY_FILE_NAME"; exit 1; }
-          
-          if [ -s "$INSTALLER_DIR/$STATIC_BINARY_FILE_NAME" ]; then
-            echo "$STATIC_BINARY_FILE_NAME downloaded successfully to $INSTALLER_DIR/."
-          else
-            echo "Error: $STATIC_BINARY_FILE_NAME download failed or file is empty"
-            exit 1
-          fi
+          SCRIPT_FILE="docker_install.sh"
+          echo "Downloading Docker installation script $SCRIPT_URL"
+          curl -sL -o "$SCRIPT_FILE" "$SCRIPT_URL" || { echo "Error: Failed to download $SCRIPT_FILE"; exit 1; }
 
       - name: Prepare Release Notes
         run: |
           set -euf -o pipefail
           generate_release_notes() {
-            INSTALLER_DIR="installers"
             local release_note_file="release_notes.md"
             local engine_version_from_env="${{ env.version }}"
             local engine_version_display="v${engine_version_from_env}"
             local current_date=$(date -u +"%Y-%m-%d %H:%M:%S UTC")
 
-            # Write release notes (remove all asset sections)
+            # Write release notes (only installation guide)
             {
               echo "<!-- -*- coding: utf-8 -*- -->"
-              echo "# 🐳 **Docker Installers Release - Engine *${engine_version_display}* ** 🚀"
+              echo "# 🐳 **Docker Installers Release - ${engine_version_display}** 🚀"
               echo ""
               echo "> **Generated on**: *${current_date}*"
               echo ""
               echo "This release provides the latest Docker installers and tools, fetched from official sources. The Docker Engine version above applies to the static binary and the \`get.docker.com\` script."
               echo ""
-              echo "---"
               echo "## **Installation Guide** 📚"
               echo ""
               echo "### 🇬🇧 **How to Install**"
@@ -152,8 +131,7 @@ jobs:
           name: "Docker Installers - Latest Available (Engine v${{ env.version }})"
           body_path: release_notes.md
           files: |
-            installers/docker_install.sh
-            installers/docker-${{ env.version }}.tgz
+            docker_install.sh
             installers/docker_desktop_installer_windows_x86_64.exe
             installers/docker_desktop_installer_mac_arm64.dmg
             installers/docker_desktop_installer_mac_x86_64.dmg
