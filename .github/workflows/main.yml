@@ -163,8 +163,8 @@ jobs:
                     current_description_zh="Docker Desktop Windows 版（x86_64）"
                     file_icon="🪟" ;;
                   "docker_desktop_installer_mac_arm64.dmg")
-                    current_description="Docker Desktop for macOS (Jul Silicon, arm64)"
-                    current_description_zh="Docker Desktop macOS 版（Jul Silicon，arm64）"
+                    current_description="Docker Desktop for macOS (Apple Silicon, arm64)"
+                    current_description_zh="Docker Desktop macOS 版（Apple Silicon，arm64）"
                     file_icon="🍎" ;;
                   "docker_desktop_installer_mac_x86_64.dmg")
                     current_description="Docker Desktop for macOS (Intel, x86_64)"
@@ -178,7 +178,7 @@ jobs:
                   "docker_desktop_installer_linux_fedora_x86_64.rpm"|\
                   "docker_desktop_installer_linux_centos_x86_64.rpm")
                     current_description="Docker Desktop for Linux (Fedora/RHEL based, .rpm)"
-                    current_description_zh="Docker Desktop Linux 版（基于 Fedora/RHEL，.rpm 格式）"
+                    current_description_zh=" NODE Desktop Linux 版（基于 Fedora/RHEL，.rpm 格式）"
                     file_icon="🐳" ;;
                   *)
                     current_description="Utility or Installer File"
@@ -263,7 +263,7 @@ jobs:
             cat "$release_note_file"
             echo "--- End of Release Notes ---"
           }
-          generate붕 generate_release_notes
+          generate_release_notes
 
       - name: Create Release
         id: release
