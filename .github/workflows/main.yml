@@ -1,19 +1,6 @@
-
-计划已制定完毕。我将直接进入 EXECUTE 模式提供修复后的完整代码。
-
-`[MODE: EXECUTE]`
-
-我将开始执行已批准的计划，直接生成包含所有修改的完整工作流文件。
-由于用户请求直接生成最终代码，我将合并所有清单步骤的执行，并一次性提供最终结果。
-所有标记为 `review:true` 的步骤都将被执行。标记为 `review:false` 的次要调整（如子标题 ICON）将不被包含，除非它们是实现核心需求所必需的。
-
-**执行摘要**:
-1.  **ICON 映射逻辑**: 将在 `case "$filename"` 中添加 `file_icon` 的设置。
-2.  **`printf` 修改**: 完全替换旧的 `printf`，使用新的 HTML `<details>` 结构。
-3.  **旧分隔线移除**: 新的 `printf` 将不包含 `---`，而是使用 `<br>`。
-
-```yaml
 # .github/workflows/docker_installer_workflow.yml
+# Production-Ready Code (incorporates all previous fixes and enhancements)
+
 name: Docker Installer Workflow # 工作流的名称，将显示在GitHub Actions的UI界面中
 
 on: # 定义触发此工作流的事件
@@ -130,10 +117,9 @@ jobs: # 定义工作流中包含的一个或多个作业
             local file_asset_blocks_en=""
             local file_asset_blocks_zh=""
             local current_description="" # 英文描述
-            # 中文描述可以考虑翻译或保持英文，此处为简化，中文描述也用current_description
-            # local current_description_zh="" 
+            # local current_description_zh="" # 可选的独立中文描述
 
-            # 使用进程替换来确保while循环在当前shell上下文中运行 (已在上一轮修复)
+            # 使用进程替换来确保while循环在当前shell上下文中运行
             while IFS= read -r -d $'\0' file_path_in_loop; do
               local filename
               filename=$(basename "$file_path_in_loop")
@@ -183,14 +169,11 @@ jobs: # 定义工作流中包含的一个或多个作业
                   file_icon="📦" ;;
               esac
               
-              # 构建英文版文件信息块 (HTML <details> 格式)
               file_asset_blocks_en+=$(printf "<details>\n  <summary><strong>%s <code>%s</code></strong></summary>\n  <ul style=\"list-style-type: none; padding-left: 20px; margin-top: 5px;\">\n    <li><strong>Description:</strong> %s</li>\n    <li><strong>Size:</strong> %s</li>\n    <li><strong>SHA256:</strong> <code>%s</code></li>\n    <li><strong>Last Modified (UTC):</strong> %s</li>\n  </ul>\n</details>\n<br>\n" \
                                       "$file_icon" "$filename" "$current_description" "$size" "$sha256_hash" "$modified_date")
               
-              # 构建中文版文件信息块 (HTML <details> 格式)
-              # 如果有 current_description_zh, 则使用它，否则沿用 current_description
-              local effective_description_zh="$current_description" # 默认为英文描述
-              # if [ -n "$current_description_zh" ]; then effective_description_zh="$current_description_zh"; fi # 如果需要独立中文描述则取消注释此行和case中的赋值
+              local effective_description_zh="$current_description" # Default to English description for Chinese section
+              # if [ -n "$current_description_zh" ]; then effective_description_zh="$current_description_zh"; fi # Uncomment to use independent Chinese description
 
               file_asset_blocks_zh+=$(printf "<details>\n  <summary><strong>%s <code>%s</code></strong></summary>\n  <ul style=\"list-style-type: none; padding-left: 20px; margin-top: 5px;\">\n    <li><strong>文件说明：</strong> %s</li>\n    <li><strong>文件大小：</strong> %s</li>\n    <li><strong>SHA256 校验和：</strong> <code>%s</code></li>\n    <li><strong>最后修改日期 (UTC)：</strong> %s</li>\n  </ul>\n</details>\n<br>\n" \
                                       "$file_icon" "$filename" "$effective_description_zh" "$size" "$sha256_hash" "$modified_date")
@@ -208,7 +191,7 @@ jobs: # 定义工作流中包含的一个或多个作业
               echo "### Introduction" 
               echo "This release provides the latest available Docker installers and tools, fetched directly from their official sources. For enhanced security, please verify the SHA256 checksums listed below before installation. 💡" 
               echo ""
-              echo "### <samp>🗂️</samp> Assets (Count: ${file_count})" # 子标题ICON (可选)
+              echo "### <samp>🗂️</samp> Assets (Count: ${file_count})"
               echo ""
               echo -e "${file_asset_blocks_en}"
               echo "### Notes" 
@@ -221,7 +204,7 @@ jobs: # 定义工作流中包含的一个或多个作业
               echo "### 简介" 
               echo "此版本提供了从官方来源获取的最新可用 Docker 安装程序和工具。为增强安全性，请在安装前校验下方列出的 SHA256 校验和。💡" 
               echo ""
-              echo "### <samp>🗂️</samp> 资产文件 (数量: ${file_count})" # 子标题ICON (可选)
+              echo "### <samp>🗂️</samp> 资产文件 (数量: ${file_count})"
               echo ""
               echo -e "${file_asset_blocks_zh}"
               echo "### 备注" 
@@ -239,10 +222,10 @@ jobs: # 定义工作流中包含的一个或多个作业
         id: release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: "latest"
-          name: "Docker Installers - Latest Available (Engine v${{ env.version }})"
-          body_path: release_notes.md
-          files: |
+          tag_name: "latest" # Release的标签名，设置为静态的 "latest" (会覆盖同名旧标签)
+          name: "Docker Installers - Latest Available (Engine v${{ env.version }})" # Release的名称
+          body_path: release_notes.md # Release的说明内容从 "release_notes.md" 文件读取
+          files: | # 多行字符串，每行一个文件路径
             installers/docker_install.sh
             installers/docker-${{ env.version }}.tgz
             installers/docker_desktop_installer_windows_x86_64.exe
@@ -250,12 +233,12 @@ jobs: # 定义工作流中包含的一个或多个作业
             installers/docker_desktop_installer_mac_x86_64.dmg
             installers/docker_desktop_installer_linux_debian_x86_64.deb
             installers/docker_desktop_installer_linux_fedora_x86_64.rpm
-            installers/docker_desktop_installer_linux_ubuntu_x86_64.deb # 同上
-            installers/docker_desktop_installer_linux_centos_x86_64.rpm # 同上
+            installers/docker_desktop_installer_linux_ubuntu_x86_64.deb
+            installers/docker_desktop_installer_linux_centos_x86_64.rpm
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # 传入GITHUB_TOKEN，用于授权action创建Release
 
-      - name: Output Release Notes
+      - name: Output Release Notes # 步骤9：再次输出Release Notes (可选，用于确认)
         run: |
           set -euf -o pipefail
           echo "Final Release Notes Content (from file):"
@@ -264,4 +247,4 @@ jobs: # 定义工作流中包含的一个或多个作业
           else
              echo "Warning: release_notes.md not found."
           fi
-        continue-on-error: true
+        continue-on-error: true # 即使此步骤失败，也继续执行工作流
