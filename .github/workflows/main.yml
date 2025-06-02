@@ -60,11 +60,12 @@ jobs:
             echo "正在从 $url 下载 $file_name"
             curl -L -o "$file_path" "$url" || { echo "错误：下载 $file_name 失败"; exit 1; }
             
-            if [ ! -s "$file_path" ]; then
+            if [ -s "$file_path" ]; then
+              echo "$file_name 下载成功."
+            else
               echo "错误：$file_name 下载失败或文件为空"
               exit 1
             fi
-            echo "$file_name 下载成功."
           done
 
       - name: Download Docker Installation Script
@@ -97,11 +98,12 @@ jobs:
           echo "正在下载 Docker 引擎静态二进制包: $STATIC_BINARY_URL"
           curl -L -o "$INSTALLER_DIR/$STATIC_BINARY_FILE_NAME" "$STATIC_BINARY_URL" || { echo "错误：下载 $STATIC_BINARY_FILE_NAME 失败"; exit 1; }
           
-          if [ ! -s "$INSTALLER_DIR/$STATIC_BINARY_FILE_NAME" ]; then
+          if [ -s "$INSTALLER_DIR/$STATIC_BINARY_FILE_NAME" ]; then
+            echo "$STATIC_BINARY_FILE_NAME 下载成功到 $INSTALLER_DIR/."
+          else
             echo "错误：$STATIC_BINARY_FILE_NAME 下载失败或文件为空"
             exit 1
           fi
-          echo "$STATIC_BINARY_FILE_NAME 下载成功到 $INSTALLER_DIR/."
 
       - name: Prepare Release Notes
         run: |
@@ -124,6 +126,8 @@ jobs:
             
             local current_description=""
             local current_description_zh=""
+
+            echo "Debug: Starting generation of assets_table.md with file_count: $file_count"
 
             if [ "$file_count" -gt 0 ]; then
               # English Table Header and Aligner
@@ -178,7 +182,7 @@ jobs:
                   "docker_desktop_installer_linux_fedora_x86_64.rpm"|\
                   "docker_desktop_installer_linux_centos_x86_64.rpm")
                     current_description="Docker Desktop for Linux (Fedora/RHEL based, .rpm)"
-                    current_description_zh=" NODE Desktop Linux 版（基于 Fedora/RHEL，.rpm 格式）"
+                    current_description_zh="Docker Desktop Linux 版（基于 Fedora/RHEL，.rpm 格式）"
                     file_icon="🐳" ;;
                   *)
                     current_description="Utility or Installer File"
@@ -194,6 +198,7 @@ jobs:
               done
 
               # Write assets table to assets_table.md
+              echo "Debug: Writing assets_table.md with content length: ${#table_rows_en}"
               {
                 echo "<!-- -*- coding: utf-8 -*- -->"
                 echo "${table_rows_en}"
@@ -202,6 +207,7 @@ jobs:
                 echo ""
                 echo "${table_rows_zh}"
               } > "$assets_table_file"
+              echo "Debug: assets_table.md generation completed, file exists: $( [ -f "$assets_table_file" ] && echo "yes" || echo "no" )"
             fi
 
             # Write release notes
@@ -295,4 +301,5 @@ jobs:
           else
              echo "警告：未找到 release_notes.md。"
           fi
+          echo "Debug: Checking assets_table.md existence: $( [ -f "assets_table.md" ] && echo "yes" || echo "no" )"
         continue-on-error: true
