@@ -1,6 +1,6 @@
 # .github/workflows/docker_installer_workflow.yml
 # Final Production-Ready Code 
-# (Features: Markdown Table for Assets, Aesthetic Enhancements, Accurate File Count, Zero-Count Handling, Chinese Descriptions, Improved Formatting)
+# (Features: Removed Asset Display, Retained Installation Guide, Accurate File Count, Improved Formatting)
 
 name: Docker Installer Workflow
 
@@ -29,10 +29,10 @@ jobs:
           set -euf -o pipefail
           latest_version=$(curl -s https://download.docker.com/linux/static/stable/x86_64/ | grep -oP 'docker-\K[0-9]+\.[0-9]+\.[0-9]+' | sort -V | tail -n 1)
           if [ -z "$latest_version" ]; then
-            echo "错误：未找到稳定的 Docker 版本，退出。"
+            echo "Error: No stable Docker version found, exiting."
             exit 1
           fi
-          echo "最新稳定 Docker 版本: $latest_version"
+          echo "Latest stable Docker version: $latest_version"
           echo "version=$latest_version" >>$GITHUB_ENV
 
       - name: Download Docker Installers
@@ -57,13 +57,13 @@ jobs:
             file_name="docker_desktop_installer_${key}.${extension}"
             file_path="$INSTALLER_DIR/$file_name"
             
-            echo "正在从 $url 下载 $file_name"
-            curl -L -o "$file_path" "$url" || { echo "错误：下载 $file_name 失败"; exit 1; }
+            echo "Downloading $file_name from $url"
+            curl -L -o "$file_path" "$url" || { echo "Error: Failed to download $file_name"; exit 1; }
             
             if [ -s "$file_path" ]; then
-              echo "$file_name 下载成功."
+              echo "$file_name downloaded successfully."
             else
-              echo "错误：$file_name 下载失败或文件为空"
+              echo "Error: $file_name download failed or file is empty"
               exit 1
             fi
           done
@@ -76,9 +76,9 @@ jobs:
           SCRIPT_URL="https://get.docker.com"
           SCRIPT_FILE_NAME="docker_install.sh"
           SCRIPT_FILE_PATH="$INSTALLER_DIR/$SCRIPT_FILE_NAME"
-          echo "正在下载 Docker 安装脚本 $SCRIPT_URL 到 $SCRIPT_FILE_PATH"
-          curl -sL -o "$SCRIPT_FILE_PATH" "$SCRIPT_URL" || { echo "错误：下载 $SCRIPT_FILE_NAME 失败"; exit 1; }
-          echo "$SCRIPT_FILE_NAME 下载成功."
+          echo "Downloading Docker installation script $SCRIPT_URL to $SCRIPT_FILE_PATH"
+          curl -sL -o "$SCRIPT_FILE_PATH" "$SCRIPT_URL" || { echo "Error: Failed to download $SCRIPT_FILE_NAME"; exit 1; }
+          echo "$SCRIPT_FILE_NAME downloaded successfully."
 
       - name: Download Docker Engine Static Binary (Linux x86_64)
         run: |
@@ -87,7 +87,7 @@ jobs:
           ENGINE_VERSION="${{ env.version }}"
           
           if [ -z "$ENGINE_VERSION" ]; then
-            echo "错误：Docker 引擎版本 (env.version) 未获取到，无法下载静态二进制包。"
+            echo "Error: Docker Engine version (env.version) not retrieved, cannot download static binary."
             exit 1
           fi
           
@@ -95,13 +95,13 @@ jobs:
           STATIC_BINARY_URL="https://download.docker.com/linux/static/stable/x86_64/${STATIC_BINARY_FILE_NAME}"
           
           mkdir -p "$INSTALLER_DIR"
-          echo "正在下载 Docker 引擎静态二进制包: $STATIC_BINARY_URL"
-          curl -L -o "$INSTALLER_DIR/$STATIC_BINARY_FILE_NAME" "$STATIC_BINARY_URL" || { echo "错误：下载 $STATIC_BINARY_FILE_NAME 失败"; exit 1; }
+          echo "Downloading Docker Engine static binary: $STATIC_BINARY_URL"
+          curl -L -o "$INSTALLER_DIR/$STATIC_BINARY_FILE_NAME" "$STATIC_BINARY_URL" || { echo "Error: Failed to download $STATIC_BINARY_FILE_NAME"; exit 1; }
           
           if [ -s "$INSTALLER_DIR/$STATIC_BINARY_FILE_NAME" ]; then
-            echo "$STATIC_BINARY_FILE_NAME 下载成功到 $INSTALLER_DIR/."
+            echo "$STATIC_BINARY_FILE_NAME downloaded successfully to $INSTALLER_DIR/."
           else
-            echo "错误：$STATIC_BINARY_FILE_NAME 下载失败或文件为空"
+            echo "Error: $STATIC_BINARY_FILE_NAME download failed or file is empty"
             exit 1
           fi
 
@@ -111,106 +111,11 @@ jobs:
           generate_release_notes() {
             INSTALLER_DIR="installers"
             local release_note_file="release_notes.md"
-            local assets_table_file="assets_table.md"
             local engine_version_from_env="${{ env.version }}"
             local engine_version_display="v${engine_version_from_env}"
             local current_date=$(date -u +"%Y-%m-%d %H:%M:%S UTC")
 
-            # Accurately count files by populating an array first
-            local files_to_process=()
-            while IFS= read -r -d $'\0' f; do files_to_process+=("$f"); done < <(find "$INSTALLER_DIR" -maxdepth 1 -type f -print0)
-            local file_count="${#files_to_process[@]}"
-
-            local table_rows_en=""
-            local table_rows_zh=""
-            
-            local current_description=""
-            local current_description_zh=""
-
-            echo "Debug: Starting generation of assets_table.md with file_count: $file_count"
-
-            if [ "$file_count" -gt 0 ]; then
-              # English Table Header and Aligner
-              table_rows_en="# **Available Assets** 🗂️\n\n"
-              table_rows_en+="> **Total Assets**: ${file_count} files available for download\n\n"
-              table_rows_en+="| **Icon** | **Filename**                       | **Description**                                  | **Size**     | **SHA256**                               | **Last Modified (UTC)** |\n"
-              table_rows_en+="| :------: | :--------------------------------- | :----------------------------------------------- | :----------: | :--------------------------------------- | :---------------------- |\n"
-              # Chinese Table Header and Aligner
-              table_rows_zh="# **可用资产文件** 🗂️\n\n"
-              table_rows_zh+="> **资产数量**：${file_count} 个文件可供下载\n\n"
-              table_rows_zh+="| **图标** | **文件名**                         | **文件说明**                                     | **大小**     | **SHA256 校验和**                        | **最后修改日期 (UTC)** |\n"
-              table_rows_zh+="| :------: | :--------------------------------- | :----------------------------------------------- | :----------: | :--------------------------------------- | :---------------------- |\n"
-
-              for file_path_in_loop in "${files_to_process[@]}"; do
-                local filename
-                filename=$(basename "$file_path_in_loop")
-                local size
-                size=$(du -h "$file_path_in_loop" | cut -f1)
-                local modified_date
-                modified_date=$(stat -c %y "$file_path_in_loop" | cut -d'.' -f1)
-                local sha256_hash
-                sha256_hash=$(sha256sum "$file_path_in_loop" | cut -d' ' -f1)
-                
-                local file_icon="🗄️"
-
-                case "$filename" in
-                  "docker_install.sh")
-                    current_description="Docker Engine Installation Script (Generic Linux)"
-                    current_description_zh="Docker 引擎安装脚本（通用 Linux）"
-                    file_icon="📋" ;;
-                  "docker-${engine_version_from_env}.tgz")
-                    current_description="Docker Engine Static Binary ${engine_version_display} (Linux x86_64)"
-                    current_description_zh="Docker 引擎静态二进制文件 ${engine_version_display}（Linux x86_64）"
-                    file_icon="🐳" ;;
-                  "docker_desktop_installer_windows_x86_64.exe")
-                    current_description="Docker Desktop for Windows (x86_64)"
-                    current_description_zh="Docker Desktop Windows 版（x86_64）"
-                    file_icon="🪟" ;;
-                  "docker_desktop_installer_mac_arm64.dmg")
-                    current_description="Docker Desktop for macOS (Apple Silicon, arm64)"
-                    current_description_zh="Docker Desktop macOS 版（Apple Silicon，arm64）"
-                    file_icon="🍎" ;;
-                  "docker_desktop_installer_mac_x86_64.dmg")
-                    current_description="Docker Desktop for macOS (Intel, x86_64)"
-                    current_description_zh="Docker Desktop macOS 版（Intel，x86_64）"
-                    file_icon="🍎" ;;
-                  "docker_desktop_installer_linux_debian_x86_64.deb"|\
-                  "docker_desktop_installer_linux_ubuntu_x86_64.deb")
-                    current_description="Docker Desktop for Linux (Debian/Ubuntu based, .deb)"
-                    current_description_zh="Docker Desktop Linux 版（基于 Debian/Ubuntu，.deb 格式）"
-                    file_icon="🐳" ;;
-                  "docker_desktop_installer_linux_fedora_x86_64.rpm"|\
-                  "docker_desktop_installer_linux_centos_x86_64.rpm")
-                    current_description="Docker Desktop for Linux (Fedora/RHEL based, .rpm)"
-                    current_description_zh="Docker Desktop Linux 版（基于 Fedora/RHEL，.rpm 格式）"
-                    file_icon="🐳" ;;
-                  *)
-                    current_description="Utility or Installer File"
-                    current_description_zh="实用工具或安装文件"
-                    file_icon="🗄️" ;;
-                esac
-                
-                table_rows_en+=$(printf "| %s | \`%s\` | %s | %10s | \`%s\` | %s |\n" \
-                                          "$file_icon" "$filename" "$current_description" "$size" "$sha256_hash" "$modified_date")
-                
-                table_rows_zh+=$(printf "| %s | \`%s\` | %s | %10s | \`%s\` | %s |\n" \
-                                          "$file_icon" "$filename" "$current_description_zh" "$size" "$sha256_hash" "$modified_date")
-              done
-
-              # Write assets table to assets_table.md
-              echo "Debug: Writing assets_table.md with content length: ${#table_rows_en}"
-              {
-                echo "<!-- -*- coding: utf-8 -*- -->"
-                echo "${table_rows_en}"
-                echo ""
-                echo "---"
-                echo ""
-                echo "${table_rows_zh}"
-              } > "$assets_table_file"
-              echo "Debug: assets_table.md generation completed, file exists: $( [ -f "$assets_table_file" ] && echo "yes" || echo "no" )"
-            fi
-
-            # Write release notes
+            # Write release notes (remove all asset sections)
             {
               echo "<!-- -*- coding: utf-8 -*- -->"
               echo "# 🐳 **Docker Installers Release - Engine *${engine_version_display}* ** 🚀"
@@ -218,49 +123,17 @@ jobs:
               echo "> **Generated on**: *${current_date}*"
               echo ""
               echo "This release provides the latest Docker installers and tools, fetched from official sources. The Docker Engine version above applies to the static binary and the \`get.docker.com\` script."
-              echo "本次发布提供从官方来源获取的最新 Docker 安装程序和工具。上述 Docker 引擎版本适用于静态二进制文件及 \`get.docker.com\` 脚本。"
-              echo ""
-              echo "---"
-              echo "## 🇬🇧 **Available Assets** 🗂️"
-              echo ""
-              echo "> **Overview**"
-              echo "> The default 'Assets' section below uses a list style managed by GitHub, which cannot be customized directly. For a detailed and formatted table with SHA256 checksums, please see the linked file."
-              echo ""
-              if [ "$file_count" -gt 0 ]; then
-                echo "**[📋 View Detailed Assets Table](assets_table.md)**"
-              else
-                echo "*No assets available for this release at this time.*"
-              fi
-              echo ""
-              echo "## 🇨🇳 **可用资产文件** 🗂️"
-              echo ""
-              echo "> **概述**"
-              echo "> 默认的 'Assets' 部分使用 GitHub 管理的列表样式，无法直接自定义。如需查看详细表格（包含 SHA256 校验和），请点击下方链接。"
-              echo ""
-              if [ "$file_count" -gt 0 ]; then
-                echo "**[📋 查看详细资产表格](assets_table.md)**"
-              else
-                echo "*本次发布暂时没有可用的资产文件。*"
-              fi
               echo ""
               echo "---"
               echo "## **Installation Guide** 📚"
               echo ""
               echo "### 🇬🇧 **How to Install**"
-              echo "1. **Download**: Select the appropriate installer from the 'Assets' section below or the detailed table."
-              echo "2. **Verify**: Use the SHA256 checksum from the table to verify the downloaded file."
+              echo "1. **Download**: Select the appropriate installer from the 'Assets' section below."
+              echo "2. **Verify**: Use the SHA256 checksum (available in the release assets) to verify the downloaded file."
               echo "3. **Install**: Follow the official [Docker Installation Instructions](https://docs.docker.com/get-docker/)."
               echo "4. **Get Support**: Visit the [Docker Community](https://www.docker.com/community/) for help."
               echo ""
               echo "**[📘 View Full Documentation](https://docs.docker.com)** | **[📩 Submit Feedback](https://github.com/docker/docker.github.io/issues)**"
-              echo ""
-              echo "### 🇨🇳 **安装指南**"
-              echo "1. **下载**：从下方 'Assets' 部分或详细表格中选择适合您平台的安装程序。"
-              echo "2. **校验**：使用表格中的 SHA256 校验和验证下载文件的完整性。"
-              echo "3. **安装**：按照官方 [Docker 安装说明](https://docs.docker.com/get-docker/) 进行安装。"
-              echo "4. **获取支持**：访问 [Docker 社区](https://www.docker.com/community/) 获取帮助。"
-              echo ""
-              echo "**[📘 查看完整文档](https://docs.docker.com)** | **[📩 提交反馈](https://github.com/docker/docker.github.io/issues)**"
               echo ""
               echo "> **Note**: Always download from official sources to ensure security and compatibility. 🙌 **Thank you for using Docker!**"
             } > "$release_note_file"
@@ -288,7 +161,6 @@ jobs:
             installers/docker_desktop_installer_linux_fedora_x86_64.rpm
             installers/docker_desktop_installer_linux_ubuntu_x86_64.deb
             installers/docker_desktop_installer_linux_centos_x86_64.rpm
-            assets_table.md
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -299,7 +171,6 @@ jobs:
           if [ -f "release_notes.md" ]; then
              cat "release_notes.md"
           else
-             echo "警告：未找到 release_notes.md。"
+             echo "Warning: release_notes.md not found."
           fi
-          echo "Debug: Checking assets_table.md existence: $( [ -f "assets_table.md" ] && echo "yes" || echo "no" )"
         continue-on-error: true
